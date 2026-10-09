@@ -232,8 +232,17 @@
 
   <div class="colRight">
   <button class="big" id="openDisplay">Open Talent Display →</button>
-  <div class="hint">Opens a second window. In that window click <b>Use Camera</b> (pick the OBS Virtual Camera),
-    or <b>Capture Feed</b> and pick your OBS <b>Windowed Projector (Program)</b>. Drag it to the talent's screen and press <b>Fullscreen</b>.</div>
+  <div class="hint">Opens the talent Display. Pick your feed below (the OBS Virtual Camera), then drag the Display to the
+    talent's screen and press <b>Fullscreen</b>. No camera? Use <b>Capture Feed</b> in the Display's toolbar instead.</div>
+
+  <div class="card">
+    <h2>Feed <span class="hctl"><button class="tog2" id="ctlCamRefresh" title="Re-scan cameras (also asks for camera access the first time)">REFRESH</button></span></h2>
+    <select class="pos" id="ctlCamSel" style="width:100%"></select>
+    <div class="row">
+      <button class="ghost" id="ctlCamReconnect">Reconnect</button>
+      <span class="hint" id="ctlFeedState" style="margin:0">Open the talent Display, then pick a camera.</span>
+    </div>
+  </div>
 
   <div class="card">
     <h2>Producer Note <span class="hctl"><select class="pos" id="prodPos"></select><button class="tog2" id="prodShow">HIDE</button></span></h2>
@@ -285,10 +294,8 @@
   <div id="prod" class="layer"><span class="tag">PRODUCER</span><span id="prodBody"></span></div>
   <div id="bar">
     <button id="capFeed">Capture Feed</button>
-    <button id="useCam">Use Camera</button>
-    <select id="camSel" class="hidden"></select>
     <button class="ghost" id="fs">Fullscreen</button>
-    <span class="status" id="feedStatus">no feed — click Use Camera (OBS Virtual Camera), or Capture Feed and pick the OBS projector window</span>
+    <span class="status" id="feedStatus">no feed — pick a camera on the Control page, or click Capture Feed and pick the OBS projector window</span>
   </div>
 </div>
 
@@ -331,7 +338,17 @@ if(isDisplay){
             bar:bar,status:feedStatus};
   let state=null;
 
-  window.addEventListener("message",e=>{ if(e.data&&e.data.type==="state"){ state=e.data.state; render(); }});
+  // feed status is shown here AND mirrored to Control, which is where the camera gets chosen now
+  const report=t=>{ el.status.textContent=t; if(window.opener) window.opener.postMessage({type:"feed",text:t},"*"); };
+  // Control picks the camera: state.camId = device, state.camReq bumps whenever it wants a (re)connect.
+  // The first state after opening connects the chosen/remembered camera; after that only a new camReq does.
+  let seenReq=null;
+  function applyFeedState(){
+    if(seenReq===null){ seenReq=state.camReq||0; const id=state.camId||localStorage.getItem("cm_cam"); if(id) startCam(id); return; }
+    if((state.camReq||0)!==seenReq){ seenReq=state.camReq||0; if(state.camId) startCam(state.camId); }
+  }
+
+  window.addEventListener("message",e=>{ if(e.data&&e.data.type==="state"){ state=e.data.state; applyFeedState(); render(); }});
   if(window.opener) window.opener.postMessage({type:"ready"},"*");
 
   // one place that swaps the feed source, so the old stream's end event can't trigger the new one's retry
@@ -339,7 +356,7 @@ if(isDisplay){
   function setFeed(stream,msg){
     clearTimeout(retry);
     if(feedStream) feedStream.getTracks().forEach(t=>{ t.onended=null; t.stop(); });
-    feedStream=stream; el.feed.srcObject=stream; el.status.textContent=msg;
+    feedStream=stream; el.feed.srcObject=stream; report(msg);
   }
 
   capFeed.onclick=async()=>{
@@ -349,41 +366,31 @@ if(isDisplay){
       setFeed(s,"feed live (screen capture)");
       s.getVideoTracks()[0].onended=()=>{ setFeed(null,"feed stopped"); };
     }catch(err){
-      el.status.textContent = err && err.name==="NotAllowedError"
+      report(err && err.name==="NotAllowedError"
         ? "capture cancelled — if the window was missing/blank, grant Screen Recording to this browser (System Settings ▸ Privacy) and restart it"
-        : "capture failed: "+((err&&err.message)||err);
+        : "capture failed: "+((err&&err.message)||err));
     }
   };
 
   // OBS Virtual Camera shows up as a normal camera. Camera permission, unlike screen capture, is
-  // remembered by the browser, so the saved device auto-connects on load.
+  // remembered by the browser, so the chosen device connects without a prompt.
   const gum=v=>navigator.mediaDevices.getUserMedia({video:Object.assign({width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:60}},v),audio:false});
-  async function startCam(prefer){
+  async function startCam(id){
+    clearTimeout(retry);
     try{
-      let s=null;
-      if(prefer) try{ s=await gum({deviceId:{exact:prefer}}); }catch(e){}   // remembered device, no other camera flickers on
-      if(!s) s=await gum({});                    // first run: grants permission so device labels become readable
-      const cams=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==="videoinput");
-      const pick=cams.find(d=>d.deviceId===prefer)||cams.find(d=>/obs virtual/i.test(d.label));
-      if(pick && pick.deviceId!==s.getVideoTracks()[0].getSettings().deviceId){
-        s.getTracks().forEach(t=>t.stop()); s=await gum({deviceId:{exact:pick.deviceId}});
-      }
-      const id=s.getVideoTracks()[0].getSettings().deviceId;
-      camSel.innerHTML=""; cams.forEach(d=>camSel.add(new Option(d.label||"camera",d.deviceId))); camSel.value=id;
-      camSel.classList.remove("hidden");
+      // exactly the chosen device -- never fall back to some other camera (a laptop webcam would put a face on the talent monitor)
+      const s=await gum({deviceId:{exact:id}});
       localStorage.setItem("cm_cam",id);
-      setFeed(s,"feed live (camera: "+(cams.find(d=>d.deviceId===id)||{}).label+")");
+      const label=((await navigator.mediaDevices.enumerateDevices()).find(d=>d.deviceId===id)||{}).label||"camera";
+      setFeed(s,"feed live (camera: "+label+")");
       s.getVideoTracks()[0].onended=()=>{ setFeed(null,"camera lost — retrying…"); retry=setTimeout(()=>startCam(id),3000); };
     }catch(err){
-      el.status.textContent = err && err.name==="NotAllowedError"
-        ? "camera blocked — allow camera access for this site in the browser's address bar"
-        : "camera failed: "+((err&&err.message)||err);
-      if(prefer) retry=setTimeout(()=>startCam(prefer),3000);
+      report(err && err.name==="NotAllowedError"
+        ? "camera blocked — allow camera access for this site/app, retrying…"
+        : "camera not available (is the OBS Virtual Camera started?) — retrying…");
+      retry=setTimeout(()=>startCam(id),3000);
     }
   }
-  useCam.onclick=()=>startCam(localStorage.getItem("cm_cam"));
-  camSel.onchange=()=>startCam(camSel.value);
-  if(localStorage.getItem("cm_cam")) startCam(localStorage.getItem("cm_cam"));
   fs.onclick=()=>{ document.documentElement.requestFullscreen?.(); };
 
   /* auto-hide toolbar */
@@ -491,6 +498,7 @@ if(isDisplay){
     timerShow:true, timerPos:"tc", timerSize:64,
     clockShow:true, clockSize:34,
     promptShow:false, promptMode:"full", promptTopic:"adread",
+    camId:"", camReq:0,
     timer:{mode:"down", running:false, remaining:5*60000, endAt:0, elapsed:0, startAt:0}
   }, JSON.parse(localStorage.getItem(SAVE)||"{}"));
 
@@ -499,10 +507,17 @@ if(isDisplay){
   // mirrors the show/hide flags (only) out to Firebase so Companion's feedback can read them back
   let pushUiState=()=>{};
   function send(){ localStorage.setItem(SAVE,JSON.stringify(state)); disp?.postMessage({type:"state",state},"*"); pushUiState(); }
-  window.addEventListener("message",e=>{ if(e.data&&e.data.type==="ready") send(); });
+  window.addEventListener("message",e=>{
+    if(e.data&&e.data.type==="ready") send();
+    if(e.data&&e.data.type==="feed") document.getElementById("ctlFeedState").textContent=e.data.text;   // Display's feed status
+  });
 
   openDisplay.onclick=()=>{
-    disp=window.open(location.pathname+"#display","cm_display","width=1280,height=720");
+    // already open (e.g. auto-opened by the desktop app, or Control was reloaded): bring it forward
+    // instead of silently doing nothing; window.open on the same name just re-links to the open window
+    if(!disp||disp.closed) disp=window.open(location.pathname+"#display","cm_display","width=1280,height=720");
+    if(window.cmDesktop) window.cmDesktop.showDisplay(); else if(disp) disp.focus();
+    send();
   };
 
   const $=id=>document.getElementById(id);
@@ -517,6 +532,31 @@ if(isDisplay){
   bind("timerSize","timerSize","input",toInt(64));
   bind("clockSize","clockSize","input",toInt(34));
   $("prodClear").onclick=()=>{state.prodText="";$("prodText").value="";send();};
+
+  // Feed source: the camera is chosen here; the Display (which owns the video stream) connects to it
+  const camSel=$("ctlCamSel");
+  const listCams=async()=>(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==="videoinput");
+  async function refreshCams(ask){
+    let cams=await listCams();
+    if(ask && cams.length && !cams[0].label){      // device names stay blank until camera access has been granted once
+      try{ (await navigator.mediaDevices.getUserMedia({video:true})).getTracks().forEach(t=>t.stop()); }
+      catch(e){ document.getElementById("ctlFeedState").textContent="camera access blocked — allow it for this site/app, then press Refresh"; }
+      cams=await listCams();
+    }
+    const named=cams.filter(d=>d.label);
+    camSel.innerHTML="";
+    camSel.add(new Option(named.length?"— choose a camera —":"Press Refresh to allow camera access",""));
+    named.forEach(d=>camSel.add(new Option(d.label,d.deviceId)));
+    const want=state.camId||localStorage.getItem("cm_cam")||"";
+    const pick=named.find(d=>d.deviceId===want)||(!want&&named.find(d=>/obs virtual/i.test(d.label)));
+    if(pick){ camSel.value=pick.deviceId; if(pick.deviceId!==state.camId){ state.camId=pick.deviceId; send(); } }
+  }
+  const reqCam=()=>{ state.camReq=(state.camReq||0)+1; send(); };
+  camSel.onchange=()=>{ state.camId=camSel.value; if(state.camId) reqCam(); else send(); };
+  $("ctlCamReconnect").onclick=()=>{ if(state.camId) reqCam(); };
+  $("ctlCamRefresh").onclick=()=>refreshCams(true);
+  navigator.mediaDevices.addEventListener("devicechange",()=>refreshCams(false));   // e.g. OBS Virtual Camera started
+  refreshCams(false);
 
   // SHOW/HIDE toggle buttons (label = the action; green = currently shown)
   const showPaint={};

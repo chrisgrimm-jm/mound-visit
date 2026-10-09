@@ -12,7 +12,7 @@ Two ways to get the OBS program feed into the Display. **Option A (OBS Virtual C
 **Option A — OBS Virtual Camera (recommended)**
 1. In OBS, click **Start Virtual Camera**.
 2. Open the [page](https://chrisgrimm-jm.github.io/confidence-monitor/) (**Control**) → **Open Talent Display**.
-3. In the Display window: click **Use Camera** and allow camera access once. It auto-picks a device named "OBS Virtual Camera" (or choose from the dropdown that appears). The choice is remembered: next time the Display opens, it connects by itself, and if the camera drops (e.g. the virtual camera was off) it retries every 3 seconds.
+3. In Control's **Feed** card, choose **OBS Virtual Camera** from the dropdown. It's picked automatically when found; the first time (or if the list is empty) press **Refresh** and allow camera access once. The Display connects to it, and **Reconnect** re-tries the same camera. The card shows the Display's live status ("feed live (camera: …)"). The choice is remembered, so next time the Display opens it connects by itself, and if the camera drops (e.g. the virtual camera was off) it retries every 3 seconds. It only ever connects the camera you chose — it never falls back to another one (so a laptop webcam can't end up on the talent monitor).
 4. Drag the Display to the talent's monitor and press **Fullscreen**. Drive everything from Control.
 
 This is a camera, not a screen capture, so there's no mirror-loop risk and nothing to keep windowed or hidden. The overlays (teleprompter, notes, timer, clock) are drawn only in this page, never fed back into OBS, so anything else using the same virtual camera (Zoom, vdo.ninja) sees only the clean program video.
@@ -20,7 +20,7 @@ This is a camera, not a screen capture, so there's no mirror-loop risk and nothi
 **Option B — window capture (fallback, no extra software)**
 1. Open **Control** → **Open Talent Display**.
 2. In OBS: right-click the program preview → **Windowed Projector (Program)**.
-3. In the Display window: click **Capture Feed** and pick that projector window (pick **Window**, not **Screen** — see note below). Browsers make you re-pick every time the Display reloads. Drag the Display to the talent's monitor and press **Fullscreen**.
+3. In the Display window's toolbar: click **Capture Feed** and pick that projector window (pick **Window**, not **Screen** — see note below). Browsers make you re-pick every time the Display reloads. Drag the Display to the talent's monitor and press **Fullscreen**.
 
 For Option B, the OBS Windowed Projector can sit anywhere (even hidden); `getDisplayMedia` captures its pixels directly. You put the **Display window** on the talent monitor, not the projector — even if the Display window ends up completely covering the projector on the same monitor, window capture keeps working since it grabs that window's own render buffer, not whatever's on top of it. Capturing **Entire Screen** instead of a window will feed back into itself if the Display is fullscreen on that same monitor, so always pick the specific window.
 
