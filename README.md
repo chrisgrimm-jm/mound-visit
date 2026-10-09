@@ -58,7 +58,7 @@ Show/hide toggles and timer transport go through a separate queue (the Companion
 - Method: `POST` (creates a new child — a plain `PATCH`/`PUT` to a fixed URL would go back to the one-value-wins-the-race problem this is built to avoid)
 - URL: `https://pinpoint-abf21-default-rtdb.firebaseio.com/prompter/<topic>/uiq.json`
 - Header: `Content-Type: application/json`
-- Show/hide an overlay: `{"t":"show","key":"<key>","on":true}` — `key` is one of `promptShow` (teleprompter), `prodShow` (producer note), `timerShow`, `clockShow`.
+- Show/hide an overlay: `{"t":"show","key":"<key>","on":true}` — `key` is one of `promptShow` (teleprompter), `prodShow` (producer note), `timerShow`, `clockShow`, `displayShow` (the whole talent Display).
 - Toggle an overlay: `{"t":"toggle","key":"<key>"}` — flips whatever it's currently set to, same `key` values as above.
 - Timer transport: `{"t":"timer","op":"start"}` — `op` is `start`, `pause`, or `reset`.
 
@@ -66,7 +66,7 @@ Confidence Monitor applies each queued command and deletes it immediately, so th
 
 Note this requires the Control page itself to be open in a browser tab — it's the one listening on Firebase and re-applying the change locally (the same way it already relays state to the Display), not something the Display or a server does on its own.
 
-Control also mirrors the show/hide flags (teleprompter, producer note, timer, clock, and the Display itself — `displayShow`) **out** to `prompter/<topic>/uistate` (`{"promptShow":bool,"prodShow":bool,"timerShow":bool,"clockShow":bool}`) every time any of them changes, from any source (a button click in Control, or one of the commands above) — this is what lets Companion's "element is shown" feedback color a button correctly. Nothing else about the app's state is mirrored there.
+Control also mirrors the show/hide flags (teleprompter, producer note, timer, clock, and the Display itself — `displayShow`) **out** to `prompter/<topic>/uistate` (`{"promptShow":bool,"prodShow":bool,"timerShow":bool,"clockShow":bool,"displayShow":bool}`) every time any of them changes, from any source (a button click in Control, or one of the commands above) — this is what lets Companion's "element is shown" feedback color a button correctly. Nothing else about the app's state is mirrored there.
 
 ## How it syncs
 Control and Display run on the same machine. Control opens the Display and sends the whole state over `postMessage` on every change; the Display is a pure renderer. Control also persists to `localStorage`, so a refresh keeps your setup. The program feed is either the OBS Virtual Camera (`getUserMedia`) or a window capture (`getDisplayMedia`), set up in the Display.
