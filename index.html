@@ -13,6 +13,24 @@
   #control .sub{color:#8892a6;font-size:12px;margin-bottom:18px}
   .ctl2col{display:grid;grid-template-columns:1fr 440px;gap:20px;align-items:start}
   .card{background:#11151f;border:1px solid #232a3a;border-radius:10px;padding:14px 14px 16px;margin:12px 0}
+  .ctlHead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+  .ctlHeadBtns{display:flex;gap:8px;padding-top:6px}
+  .dispDot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#555;margin-right:8px;vertical-align:middle}
+  .dispDot.on{background:#2fd16f;box-shadow:0 0 8px #2fd16f}
+  #ovStage{position:relative;width:100%;aspect-ratio:16/9;background-color:#05070b;border:1px solid #232a3a;border-radius:8px;overflow:hidden;touch-action:none;
+    background-image:linear-gradient(#10161f 1px,transparent 1px),linear-gradient(90deg,#10161f 1px,transparent 1px);background-size:10% 10%}
+  #ovStage .chip{position:absolute;transform:translate(-50%,-50%);padding:3px 8px;border-radius:6px;font:700 11px "DM Mono",monospace;letter-spacing:1px;cursor:grab;user-select:none;white-space:nowrap}
+  #ovStage .chip.prod{background:#E40000;color:#fff} #ovStage .chip.timer{background:#00B7FF;color:#04121a} #ovStage .chip.clock{background:#c7cede;color:#10161f}
+  #ovStage .chip.off{opacity:.3}
+  /* layout edit mode: every panel gets a drag/hide bar; hidden panels show dimmed so they can be restored */
+  .lbar{display:none}
+  body.layoutEdit .lbar{display:flex;align-items:center;gap:8px;background:#1b2231;border:1px dashed #3a4660;border-radius:8px;padding:5px 8px;margin-bottom:8px;font:600 11px "DM Mono",monospace;color:#c7cede;cursor:grab}
+  body.layoutEdit .lbar .grip{font-size:15px} body.layoutEdit .lbar b{flex:1}
+  body.layoutEdit .lbar button{padding:2px 10px;font-size:11px}
+  body.layoutEdit [data-pid]{outline:1px dashed #3a4660;outline-offset:2px}
+  [data-pid].phidden{display:none!important}
+  body.layoutEdit [data-pid].phidden{display:block!important;opacity:.4}
+  [data-pid].dropbefore{box-shadow:0 -3px 0 0 #00B7FF!important} [data-pid].dropafter{box-shadow:0 3px 0 0 #00B7FF!important}
   .card h2{font-family:"Bebas Neue",sans-serif;font-size:18px;letter-spacing:1px;margin:0 0 10px;color:var(--blue);display:flex;justify-content:space-between;align-items:center}
   label.tog{font-size:12px;color:#c7cede;font-family:"DM Mono",monospace;display:flex;gap:6px;align-items:center;cursor:pointer}
   textarea,input[type=text]{width:100%;background:#0a0e16;border:1px solid #2a3348;color:#fff;border-radius:8px;padding:10px;font-family:"DM Mono",monospace;font-size:14px}
@@ -120,6 +138,14 @@
   #prod{max-width:42vw;background:rgba(6,10,20,.72);border-left:4px solid var(--red);border-radius:6px;padding:8px 12px;font-size:18px;line-height:1.35}
   #prod .tag{font-family:"Bebas Neue",sans-serif;color:var(--red);font-size:14px;letter-spacing:2px;display:block}
   .hidden{display:none!important}
+  /* test pattern: shown whenever the Display is hidden or has no feed, so a blank talent monitor is never ambiguous */
+  #testPattern{position:absolute;inset:0;z-index:0;display:flex;flex-direction:column;overflow:hidden;font-family:"DM Mono",monospace;color:#fff}
+  #testPattern .bars{flex:75;display:flex} #testPattern .bars i{flex:1}
+  #testPattern .lower{flex:25;background:#101010;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center}
+  #testPattern .tpTitle{font-family:"Bebas Neue",sans-serif;font-size:min(5vw,7.5vh,80px);letter-spacing:4px;line-height:1}
+  #testPattern .tpWho{font-family:"Bebas Neue",sans-serif;font-size:min(4vw,6vh,56px);letter-spacing:3px;color:#00B7FF;line-height:1} #testPattern .tpWho:empty{display:none}
+  #testPattern .tpSub{font-size:min(1.8vw,2.6vh,22px);color:#b8c0d0;letter-spacing:2px}
+  #display.off #feed,#display.off .layer,#display.off #promptView{visibility:hidden}
   #bar{position:absolute;bottom:0;left:0;right:0;display:flex;gap:8px;padding:8px;background:rgba(0,0,0,.6);
     transition:opacity .3s;font-family:"DM Mono",monospace;font-size:12px;align-items:center;z-index:5}
   #bar.idle{opacity:0}
@@ -128,8 +154,11 @@
 
 <!-- ===== CONTROL MARKUP ===== -->
 <div id="control">
-  <h1>Confidence Monitor · Control</h1>
-  <div class="sub">In-studio talent monitor. Overlays show only here — never on the program feed.</div>
+  <div class="ctlHead"><div>
+    <h1>Confidence Monitor · Control</h1>
+    <div class="sub">In-studio talent monitor. Overlays show only here — never on the program feed.</div></div>
+    <div class="ctlHeadBtns"><button class="ghost" id="layoutReset" style="display:none">Reset layout</button><button class="ghost" id="layoutBtn">Edit layout</button></div>
+  </div>
 
   <div class="ctl2col">
   <div class="colLeft">
@@ -236,6 +265,13 @@
     talent's screen and press <b>Fullscreen</b>. No camera? Use <b>Capture Feed</b> in the Display's toolbar instead.</div>
 
   <div class="card">
+    <h2><span><span class="dispDot" id="dispDot"></span>Talent Display</span> <span class="hctl"><button class="tog2" id="displayShow">HIDE</button></span></h2>
+    <div class="hint" id="dispState" style="margin:0">Display not open — press Open Talent Display.</div>
+    <input type="text" id="studioName" placeholder="Studio name (shown on the test pattern)" style="margin-top:8px">
+    <div class="hint">HIDE blanks the whole Display and shows a test pattern (so you can tell the monitor is alive). The test pattern also appears by itself whenever there's no feed.</div>
+  </div>
+
+  <div class="card">
     <h2>Feed <span class="hctl"><button class="tog2" id="ctlCamRefresh" title="Re-scan cameras (also asks for camera access the first time)">REFRESH</button></span></h2>
     <select class="pos" id="ctlCamSel" style="width:100%"></select>
     <div class="row">
@@ -278,12 +314,20 @@
     <div class="hint">Wall-clock time of day, top-right.</div>
   </div>
 
+  <div class="card">
+    <h2>Overlay Positions <button class="tog2" id="ovReset">RESET</button></h2>
+    <div id="ovStage"></div>
+    <div class="hint">Drag the producer note, timer or clock anywhere on the talent screen. The dropdowns above still give the 9 preset spots; RESET goes back to those.</div>
+  </div>
+
   </div>
   </div>
 </div>
 
 <!-- ===== DISPLAY MARKUP ===== -->
 <div id="display" class="hidden">
+  <div id="testPattern"><div class="bars"><i style="background:#c0c0c0"></i><i style="background:#c0c000"></i><i style="background:#00c0c0"></i><i style="background:#00c000"></i><i style="background:#c000c0"></i><i style="background:#c00000"></i><i style="background:#0000c0"></i></div>
+    <div class="lower"><div class="tpTitle">CONFIDENCE MONITOR</div><div class="tpWho" id="tpWho"></div><div class="tpSub" id="tpSub">TALENT DISPLAY</div><div class="tpSub" id="tpNet"></div></div></div>
   <video id="feed" autoplay muted playsinline></video>
   <div id="promptView" class="hidden">
     <div id="promptFlip"><div id="promptText"></div></div>
@@ -339,6 +383,22 @@ if(isDisplay){
   let state=null;
 
   // feed status is shown here AND mirrored to Control, which is where the camera gets chosen now
+  // Display on-indicator for Control + test pattern when there is nothing to show
+  const patternEl=document.getElementById("testPattern"), tpSub=document.getElementById("tpSub"), tpWho=document.getElementById("tpWho"), tpNet=document.getElementById("tpNet"), displayEl=document.getElementById("display");
+  // studio name = the computer's user name (desktop app only -- a web page can't see it)
+  let who={user:"",host:"",ips:[]};
+  if(window.cmDesktop&&window.cmDesktop.hostInfo) window.cmDesktop.hostInfo().then(i=>{ if(i){ who=i; paint(); beat(); } }).catch(()=>{});
+  function paint(){
+    const off=!!state&&state.displayShow===false, hasFeed=!!el.feed.srcObject;
+    displayEl.classList.toggle("off",off);
+    el.feed.classList.toggle("hidden",!hasFeed);
+    patternEl.classList.toggle("hidden",!(off||!hasFeed));
+    tpWho.textContent=((state&&state.studio)||who.user||who.host||"").toUpperCase();   // typed studio name wins over the PC user name
+    tpSub.textContent="TALENT DISPLAY · "+(off?"HIDDEN":"NO FEED")+" · "+innerWidth+"×"+innerHeight;
+    tpNet.textContent=[who.host,(who.ips||[]).slice(0,2).join(" / ")].filter(Boolean).join(" · ");   // computer name · LAN IP (desktop app only)
+  }
+  const beat=()=>{ if(window.opener) window.opener.postMessage({type:"hb",user:who.user,host:who.host,ips:who.ips,w:innerWidth,h:innerHeight,full:innerWidth>=screen.width-2&&innerHeight>=screen.height-2},"*"); };
+  setInterval(beat,2000); window.addEventListener("resize",()=>{ paint(); beat(); });
   const report=t=>{ el.status.textContent=t; if(window.opener) window.opener.postMessage({type:"feed",text:t},"*"); };
   // Control picks the camera: state.camId = device, state.camReq bumps whenever it wants a (re)connect.
   // The first state after opening connects the chosen/remembered camera; after that only a new camReq does.
@@ -350,13 +410,14 @@ if(isDisplay){
 
   window.addEventListener("message",e=>{ if(e.data&&e.data.type==="state"){ state=e.data.state; applyFeedState(); render(); }});
   if(window.opener) window.opener.postMessage({type:"ready"},"*");
+  paint(); beat();
 
   // one place that swaps the feed source, so the old stream's end event can't trigger the new one's retry
   let feedStream=null, retry=null;
   function setFeed(stream,msg){
     clearTimeout(retry);
     if(feedStream) feedStream.getTracks().forEach(t=>{ t.onended=null; t.stop(); });
-    feedStream=stream; el.feed.srcObject=stream; report(msg);
+    feedStream=stream; el.feed.srcObject=stream; report(msg); paint();
   }
 
   capFeed.onclick=async()=>{
@@ -398,6 +459,12 @@ if(isDisplay){
     idle=setTimeout(()=>el.bar.classList.add("idle"),2500);};
   document.addEventListener("mousemove",wake); wake();
 
+  // free (dragged) position: [x,y] = centre as fractions of the screen; null = use the preset class
+  function applyXY(elm,xy){
+    if(xy){ PGRID.forEach(p=>elm.classList.remove("p-"+p));
+      elm.style.left=(xy[0]*100)+"%"; elm.style.top=(xy[1]*100)+"%"; elm.style.right="auto"; elm.style.bottom="auto"; elm.style.transform="translate(-50%,-50%)"; }
+    else { elm.style.left=elm.style.top=elm.style.right=elm.style.bottom=elm.style.transform=""; }
+  }
   const PGRID=["tl","tc","tr","ml","mc","mr","bl","bc","br"];
   function setPGrid(elm,pos){ PGRID.forEach(p=>elm.classList.remove("p-"+p)); elm.classList.add("p-"+(pos||"tl")); }
 
@@ -464,20 +531,24 @@ if(isDisplay){
     // clock
     el.clock.classList.toggle("hidden",!state.clockShow);
     el.clock.style.fontSize=(state.clockSize||34)+"px";
+    applyXY(el.clock,state.clockXY);
     // producer
     setPGrid(el.prod, state.prodPos);
     el.prod.classList.toggle("hidden",!(state.prodShow&&state.prodText));
     el.prodBody.textContent=state.prodText||"";
     el.prod.style.fontSize=(state.prodSize||18)+"px";
+    applyXY(el.prod,state.prodXY);
     // timer
     setPGrid(el.timer, state.timerPos);
     el.timer.classList.toggle("hidden",!state.timerShow);
     el.timer.style.fontSize=(state.timerSize||64)+"px";
+    applyXY(el.timer,state.timerXY);
     // teleprompter (native scroll engine, synced via Firebase — not postMessage)
     ppSubscribe(state.promptTopic||"adread");
     el.promptView.classList.toggle("hidden",!state.promptShow);
     el.promptView.classList.remove("top","bottom");
     if(state.promptMode==="top"||state.promptMode==="bottom") el.promptView.classList.add(state.promptMode);
+    paint();
   }
   // 4x/sec tick for clock + running timer
   setInterval(()=>{
@@ -498,18 +569,19 @@ if(isDisplay){
     timerShow:true, timerPos:"tc", timerSize:64,
     clockShow:true, clockSize:34,
     promptShow:false, promptMode:"full", promptTopic:"adread",
-    camId:"", camReq:0,
+    camId:"", camReq:0, displayShow:true, studio:"", prodXY:null, timerXY:null, clockXY:null,
     timer:{mode:"down", running:false, remaining:5*60000, endAt:0, elapsed:0, startAt:0}
   }, JSON.parse(localStorage.getItem(SAVE)||"{}"));
 
-  let disp=null;
+  let disp=null, lastBeat=0, beatInfo=null;
   // real implementation attached below once the teleprompter block sets up its Firebase refs --
   // mirrors the show/hide flags (only) out to Firebase so Companion's feedback can read them back
-  let pushUiState=()=>{};
-  function send(){ localStorage.setItem(SAVE,JSON.stringify(state)); disp?.postMessage({type:"state",state},"*"); pushUiState(); }
+  let pushUiState=()=>{}, stageRender=()=>{};
+  function send(){ localStorage.setItem(SAVE,JSON.stringify(state)); disp?.postMessage({type:"state",state},"*"); pushUiState(); stageRender(); }
   window.addEventListener("message",e=>{
     if(e.data&&e.data.type==="ready") send();
     if(e.data&&e.data.type==="feed") document.getElementById("ctlFeedState").textContent=e.data.text;   // Display's feed status
+    if(e.data&&e.data.type==="hb"){ lastBeat=Date.now(); beatInfo=e.data; showDisp(); }                   // Display heartbeat
   });
 
   openDisplay.onclick=()=>{
@@ -522,16 +594,29 @@ if(isDisplay){
 
   const $=id=>document.getElementById(id);
   // hydrate text inputs
-  $("prodText").value=state.prodText;
+  $("prodText").value=state.prodText; $("studioName").value=state.studio;
   $("prodSize").value=state.prodSize; $("timerSize").value=state.timerSize; $("clockSize").value=state.clockSize;
 
   const bind=(id,key,ev="input",val=e=>e.target.value)=>$(id).addEventListener(ev,e=>{state[key]=val(e);send();});
   bind("prodText","prodText");
+  bind("studioName","studio");
+  // desktop app: default the studio name to this computer's Windows user name (each studio's PC is logged in as that studio)
+  if(window.cmDesktop&&window.cmDesktop.hostInfo) window.cmDesktop.hostInfo().then(i=>{ if(i&&i.user) $("studioName").placeholder="Studio name (default: "+i.user+")"; }).catch(()=>{});
   const toInt=fallback=>e=>parseInt(e.target.value,10)||fallback;
   bind("prodSize","prodSize","input",toInt(18));
   bind("timerSize","timerSize","input",toInt(64));
   bind("clockSize","clockSize","input",toInt(34));
   $("prodClear").onclick=()=>{state.prodText="";$("prodText").value="";send();};
+
+  // "is the talent Display on?" -- the Display sends a heartbeat every 2s
+  function showDisp(){
+    const on=Date.now()-lastBeat<5000;
+    $("dispDot").classList.toggle("on",on);
+    $("dispState").textContent=on
+      ? "Display on — "+(state.studio||beatInfo.user?(state.studio||beatInfo.user)+(beatInfo.host?" ("+beatInfo.host+(beatInfo.ips&&beatInfo.ips.length?" · "+beatInfo.ips[0]:"")+") ":" "):"")+beatInfo.w+"×"+beatInfo.h+(beatInfo.full?" fullscreen":" (windowed)")+(state.displayShow===false?" · hidden, showing the test pattern":"")
+      : "Display not open — press Open Talent Display.";
+  }
+  setInterval(showDisp,1000); showDisp();
 
   // Feed source: the camera is chosen here; the Display (which owns the video stream) connects to it
   const camSel=$("ctlCamSel");
@@ -565,7 +650,7 @@ if(isDisplay){
     b.onclick=()=>{ state[key]=!state[key]; paint(); send(); }; paint();
     showPaint[key]=paint;
   }
-  ["prodShow","timerShow","clockShow","promptShow"].forEach(id=>togBtn(id,id));
+  ["displayShow","prodShow","timerShow","clockShow","promptShow"].forEach(id=>togBtn(id,id));
   // remote (Companion) set of a show/hide flag -- key is a state property name, e.g. "promptShow"
   function setShowRemote(key,on){
     if(!(key in state)) return;
@@ -575,15 +660,110 @@ if(isDisplay){
   }
 
   // position dropdowns (id === state key)
-  function fillSel(id,opts){
+  // preset spots, plus "Custom" when the overlay has been dragged on the stage (state[xyKey] = [x,y])
+  function fillSel(id,opts,xyKey){
     const s=$(id);
     opts.forEach(([v,l])=>{ const o=document.createElement("option"); o.value=v; o.textContent=l; s.appendChild(o); });
-    s.value=state[id];
-    s.addEventListener("change",()=>{ state[id]=s.value; send(); });
+    const sync=()=>{ s.value=state[xyKey]?"custom":state[id]; };
+    sync(); posSyncs.push(sync);
+    s.addEventListener("change",()=>{
+      if(s.value==="custom"){ if(!state[xyKey]) state[xyKey]=[.5,.5]; }
+      else { state[id]=s.value; state[xyKey]=null; }
+      send();
+    });
   }
+  const posSyncs=[];
   const P9=[["tl","Top left"],["tc","Top center"],["tr","Top right"],["ml","Mid left"],["mc","Center"],["mr","Mid right"],["bl","Bottom left"],["bc","Bottom center"],["br","Bottom right"]];
-  fillSel("prodPos",P9);
-  fillSel("timerPos",P9);
+  const P9C=[...P9,["custom","Custom (dragged)"]];
+  fillSel("prodPos",P9C,"prodXY");
+  fillSel("timerPos",P9C,"timerXY");
+
+  // ---- Overlay Positions stage: drag the overlays around a mini talent screen ----
+  const GRID={tl:[.12,.1],tc:[.5,.08],tr:[.88,.1],ml:[.12,.5],mc:[.5,.5],mr:[.88,.5],bl:[.12,.9],bc:[.5,.92],br:[.88,.9]};
+  const OV=[
+    {xy:"prodXY",  pos:"prodPos",  show:"prodShow",  label:"PRODUCER NOTE", cls:"prod"},
+    {xy:"timerXY", pos:"timerPos", show:"timerShow", label:"TIMER",         cls:"timer"},
+    {xy:"clockXY", pos:null,       show:"clockShow", label:"CLOCK",         cls:"clock", home:[.93,.07]} ];
+  const stage=$("ovStage");
+  OV.forEach(o=>{
+    const c=o.chip=document.createElement("div"); c.className="chip "+o.cls; c.textContent=o.label; stage.appendChild(c);
+    c.onpointerdown=e=>{ c.setPointerCapture(e.pointerId); o.drag=true; };
+    c.onpointerup=c.onpointercancel=()=>{ o.drag=false; };
+    c.onpointermove=e=>{
+      if(!o.drag) return;
+      const r=stage.getBoundingClientRect(), cl=v=>+Math.min(.97,Math.max(.03,v)).toFixed(3);
+      state[o.xy]=[cl((e.clientX-r.left)/r.width), cl((e.clientY-r.top)/r.height)];
+      posSyncs.forEach(f=>f()); send();
+    };
+  });
+  stageRender=()=>OV.forEach(o=>{
+    const [x,y]=state[o.xy]||(o.pos?GRID[state[o.pos]||"tl"]:o.home);
+    o.chip.style.left=x*100+"%"; o.chip.style.top=y*100+"%"; o.chip.classList.toggle("off",!state[o.show]);
+  });
+  $("ovReset").onclick=()=>{ OV.forEach(o=>state[o.xy]=null); posSyncs.forEach(f=>f()); send(); };
+  stageRender();
+
+  // ---- Panel layout: "Edit layout" lets you hide panels and drag them into any order (saved per machine) ----
+  (function(){
+    const LKEY="cm_layout_v1";
+    // [id, a control inside the panel, panel selector, title, group]; panels only move within their group (they're styled differently)
+    const DEFS=[["lib","#ppLibList",".panel","Script Library","P"],["edit","#ppEditor",".panel","Edit read","P"],
+      ["prev","#ppPrevWrap",".panel","Live Preview","P"],["trans","#ppPlay",".panel","Transport","P"],["appear","#ppFs",".panel","Appearance","P"],
+      ["display","#displayShow",".card","Talent Display","C"],["feed","#ctlCamSel",".card","Feed","C"],["prod","#prodShow",".card","Producer Note","C"],
+      ["timer","#timerShow",".card","Timer","C"],["clock","#clockShow",".card","Clock","C"],["layout","#ovStage",".card","Overlay Positions","C"]];
+    const ZONES={P:[...document.querySelectorAll("#promptCtl .wrap > div")], C:[document.querySelector(".colRight")]};
+    const panels={};
+    DEFS.forEach(([id,inner,up,title,group])=>{
+      const el=document.querySelector(inner).closest(up); el.dataset.pid=id; el.dataset.group=group; panels[id]=el;
+      const bar=document.createElement("div"); bar.className="lbar";
+      bar.innerHTML='<span class="grip">⠿</span><b></b><button class="ghost"></button>';
+      bar.querySelector("b").textContent=title;
+      bar.querySelector("button").onclick=()=>{ el.classList.toggle("phidden"); label(el); save(); };
+      bar.onmousedown=e=>{ if(e.target.tagName!=="BUTTON") el.draggable=true; };   // drag only from the bar, so text/inputs stay selectable
+      el.insertBefore(bar,el.firstChild); label(el);
+    });
+    function label(el){ el.querySelector(":scope > .lbar button").textContent=el.classList.contains("phidden")?"Show":"Hide"; }
+    const idsIn=z=>[...z.children].filter(c=>c.dataset&&c.dataset.pid).map(c=>c.dataset.pid);
+    const snapshot=()=>({z:{P:ZONES.P.map(idsIn),C:ZONES.C.map(idsIn)}, h:Object.keys(panels).filter(i=>panels[i].classList.contains("phidden"))});
+    const DEFAULT=snapshot();
+    function put(z,el,before){ z.insertBefore(el, before||z.querySelector(":scope > .note")); }   // keep the trailing note last
+    function apply(L){
+      ["P","C"].forEach(g=>ZONES[g].forEach((z,i)=>((L.z&&L.z[g]&&L.z[g][i])||[]).forEach(id=>{ if(panels[id]&&panels[id].dataset.group===g) put(z,panels[id]); })));
+      Object.keys(panels).forEach(i=>{ panels[i].classList.toggle("phidden",(L.h||[]).includes(i)); label(panels[i]); });
+    }
+    function save(){ try{ localStorage.setItem(LKEY,JSON.stringify(snapshot())); }catch(e){} }
+    try{ const L=JSON.parse(localStorage.getItem(LKEY)||"null"); if(L) apply(L); }catch(e){}
+
+    // drag & drop reorder (HTML5), within the same group, across that group's columns
+    let dragging=null;
+    const clear=()=>document.querySelectorAll(".dropbefore,.dropafter").forEach(x=>x.classList.remove("dropbefore","dropafter"));
+    Object.values(panels).forEach(el=>{
+      el.addEventListener("dragstart",e=>{ if(!document.body.classList.contains("layoutEdit")||!el.draggable){ e.preventDefault(); return; } dragging=el; e.dataTransfer.effectAllowed="move"; e.dataTransfer.setData("text/plain",el.dataset.pid); e.stopPropagation(); });
+      el.addEventListener("dragend",()=>{ el.draggable=false; dragging=null; clear(); save(); });
+      el.addEventListener("dragover",e=>{
+        if(!dragging||dragging===el||dragging.dataset.group!==el.dataset.group) return;
+        e.preventDefault(); e.stopPropagation(); clear();
+        const r=el.getBoundingClientRect(); el.classList.add(e.clientY>r.top+r.height/2?"dropafter":"dropbefore");
+      });
+      el.addEventListener("drop",e=>{
+        if(!dragging||dragging===el||dragging.dataset.group!==el.dataset.group) return;
+        e.preventDefault(); e.stopPropagation();
+        const after=el.classList.contains("dropafter"); clear();
+        put(el.parentNode,dragging,after?el.nextElementSibling:el);
+      });
+    });
+    Object.entries(ZONES).forEach(([g,zs])=>zs.forEach(z=>{          // dropping on empty space in a column = move to its end
+      z.addEventListener("dragover",e=>{ if(dragging&&dragging.dataset.group===g) e.preventDefault(); });
+      z.addEventListener("drop",e=>{ if(dragging&&dragging.dataset.group===g){ e.preventDefault(); put(z,dragging); } });
+    }));
+
+    const btn=$("layoutBtn"), reset=$("layoutReset");
+    btn.onclick=()=>{
+      const on=document.body.classList.toggle("layoutEdit");
+      btn.textContent=on?"Done":"Edit layout"; reset.style.display=on?"":"none";
+    };
+    reset.onclick=()=>{ apply(DEFAULT); save(); };
+  })();
 
   // teleprompter band mode (scoped seg)
   document.querySelectorAll("#promptModeSeg button").forEach(b=>b.onclick=()=>{
@@ -635,15 +815,19 @@ if(isDisplay){
   (function(){
     let topic = state.promptTopic || "adread";
     $("promptTopic").value = topic;
-    let settingsRef, contentRef, cmdRef, scriptsRef, triggerRef, uiqRef, uiStateRef;
+    let settingsRef, contentRef, cmdRef, scriptsRef, triggerRef, uiqRef, uiStateRef, lastUi="";
     function refs(){
       const b = promptBase(topic);
-      settingsRef=b.child("settings"); contentRef=b.child("content"); cmdRef=b.child("cmd"); scriptsRef=b.child("scripts"); triggerRef=b.child("trigger"); uiqRef=b.child("uiq"); uiStateRef=b.child("uistate");
+      settingsRef=b.child("settings"); contentRef=b.child("content"); cmdRef=b.child("cmd"); scriptsRef=b.child("scripts"); triggerRef=b.child("trigger"); uiqRef=b.child("uiq"); uiStateRef=b.child("uistate"); lastUi="";
     }
     refs();
     // read-only mirror of the show/hide flags Companion's feedback checks -- only these four,
     // not the whole state object (producer note text is meant to stay local/private to the talent).
-    pushUiState = ()=> uiStateRef.set({promptShow:!!state.promptShow, prodShow:!!state.prodShow, timerShow:!!state.timerShow, clockShow:!!state.clockShow});
+    pushUiState = ()=>{
+      const v={promptShow:!!state.promptShow, prodShow:!!state.prodShow, timerShow:!!state.timerShow, clockShow:!!state.clockShow, displayShow:state.displayShow!==false};
+      const j=JSON.stringify(v); if(j===lastUi) return;     // only when a flag actually changed
+      lastUi=j; uiStateRef.set(v);
+    };
 
     function setLink(on){ $("ppLink").classList.toggle("on",on); $("ppLinkTxt").textContent = on?"live (Firebase)":"offline"; }
     _ppdb.ref(".info/connected").on("value", s=>setLink(!!s.val()));
