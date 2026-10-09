@@ -232,7 +232,7 @@
 
   <div class="colRight">
   <button class="big" id="openDisplay">Open Talent Display →</button>
-  <div class="hint">Opens a second window. In that window click <b>Use Camera (NDI)</b> (OBS via DistroAV + NDI Webcam Input),
+  <div class="hint">Opens a second window. In that window click <b>Use Camera</b> (pick the OBS Virtual Camera),
     or <b>Capture Feed</b> and pick your OBS <b>Windowed Projector (Program)</b>. Drag it to the talent's screen and press <b>Fullscreen</b>.</div>
 
   <div class="card">
@@ -285,10 +285,10 @@
   <div id="prod" class="layer"><span class="tag">PRODUCER</span><span id="prodBody"></span></div>
   <div id="bar">
     <button id="capFeed">Capture Feed</button>
-    <button id="useCam">Use Camera (NDI)</button>
+    <button id="useCam">Use Camera</button>
     <select id="camSel" class="hidden"></select>
     <button class="ghost" id="fs">Fullscreen</button>
-    <span class="status" id="feedStatus">no feed — click Use Camera (NDI), or Capture Feed and pick the OBS projector window</span>
+    <span class="status" id="feedStatus">no feed — click Use Camera (OBS Virtual Camera), or Capture Feed and pick the OBS projector window</span>
   </div>
 </div>
 
@@ -355,8 +355,8 @@ if(isDisplay){
     }
   };
 
-  // NDI route: OBS (DistroAV) -> NDI Tools "Webcam Input" shows up as a normal camera. Camera permission,
-  // unlike screen capture, is remembered by the browser, so the saved device auto-connects on load.
+  // OBS Virtual Camera shows up as a normal camera. Camera permission, unlike screen capture, is
+  // remembered by the browser, so the saved device auto-connects on load.
   const gum=v=>navigator.mediaDevices.getUserMedia({video:Object.assign({width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:60}},v),audio:false});
   async function startCam(prefer){
     try{
@@ -364,7 +364,7 @@ if(isDisplay){
       if(prefer) try{ s=await gum({deviceId:{exact:prefer}}); }catch(e){}   // remembered device, no other camera flickers on
       if(!s) s=await gum({});                    // first run: grants permission so device labels become readable
       const cams=(await navigator.mediaDevices.enumerateDevices()).filter(d=>d.kind==="videoinput");
-      const pick=cams.find(d=>d.deviceId===prefer)||cams.find(d=>/ndi|obs virtual/i.test(d.label));
+      const pick=cams.find(d=>d.deviceId===prefer)||cams.find(d=>/obs virtual/i.test(d.label));
       if(pick && pick.deviceId!==s.getVideoTracks()[0].getSettings().deviceId){
         s.getTracks().forEach(t=>t.stop()); s=await gum({deviceId:{exact:pick.deviceId}});
       }

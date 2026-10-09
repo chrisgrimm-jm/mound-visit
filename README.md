@@ -7,16 +7,15 @@ Single self-contained HTML file. No build, no server. One dependency: Firebase (
 Absorbs the standalone [Prompter](https://github.com/chrisgrimm-jm/prompter) app — its script library, editor, transport, and appearance controls now live directly in this Control panel, and its scroll-and-display logic is native on this Display (no more separate prompter Control/Display windows to babysit alongside OBS and this app).
 
 ## Setup (same machine as OBS)
-Two ways to get the OBS program feed into the Display. **Option A (NDI camera) is the recommended one** — no picker, remembers itself.
+Two ways to get the OBS program feed into the Display. **Option A (OBS Virtual Camera) is the recommended one** — no picker, remembers itself.
 
-**Option A — NDI camera (recommended)**
-1. One-time: install the [DistroAV](https://github.com/DistroAV/DistroAV) plugin in OBS and the free NDI Tools (ndi.video). In OBS: Tools → DistroAV NDI Settings → enable **Main Output** (sends the Program feed over NDI).
-2. Open **NDI Webcam Input** (from NDI Tools) and pick the OBS source — it now appears to the Mac as a camera. Leave that app running.
-3. Open the [page](https://chrisgrimm-jm.github.io/confidence-monitor/) (**Control**) → **Open Talent Display**.
-4. In the Display window: click **Use Camera (NDI)** and allow camera access once. It auto-picks a device with "NDI" or "OBS Virtual Camera" in its name (or choose from the dropdown that appears). The choice is remembered: next time the Display opens, it connects by itself, and if the camera drops (e.g. NDI Webcam Input restarted) it retries every 3 seconds.
-5. Drag the Display to the talent's monitor and press **Fullscreen**. Drive everything from Control.
+**Option A — OBS Virtual Camera (recommended)**
+1. In OBS, click **Start Virtual Camera**.
+2. Open the [page](https://chrisgrimm-jm.github.io/confidence-monitor/) (**Control**) → **Open Talent Display**.
+3. In the Display window: click **Use Camera** and allow camera access once. It auto-picks a device named "OBS Virtual Camera" (or choose from the dropdown that appears). The choice is remembered: next time the Display opens, it connects by itself, and if the camera drops (e.g. the virtual camera was off) it retries every 3 seconds.
+4. Drag the Display to the talent's monitor and press **Fullscreen**. Drive everything from Control.
 
-This is a camera, not a screen capture, so there's no mirror-loop risk and nothing to keep windowed or hidden. Adds a few frames of delay versus a direct window capture (roughly 100-250 ms — fine for reading text). Your OBS Virtual Camera for vdo.ninja is a separate device and stays untouched.
+This is a camera, not a screen capture, so there's no mirror-loop risk and nothing to keep windowed or hidden. The overlays (teleprompter, notes, timer, clock) are drawn only in this page, never fed back into OBS, so anything else using the same virtual camera (Zoom, vdo.ninja) sees only the clean program video.
 
 **Option B — window capture (fallback, no extra software)**
 1. Open **Control** → **Open Talent Display**.
@@ -64,7 +63,7 @@ Note this requires the Control page itself to be open in a browser tab — it's 
 Control also mirrors those four show/hide flags **out** to `prompter/<topic>/uistate` (`{"promptShow":bool,"prodShow":bool,"timerShow":bool,"clockShow":bool}`) every time any of them changes, from any source (a button click in Control, or one of the commands above) — this is what lets Companion's "element is shown" feedback color a button correctly. Nothing else about the app's state is mirrored there.
 
 ## How it syncs
-Control and Display run on the same machine. Control opens the Display and sends the whole state over `postMessage` on every change; the Display is a pure renderer. Control also persists to `localStorage`, so a refresh keeps your setup. The program feed is either an NDI webcam (`getUserMedia`) or a window capture (`getDisplayMedia`), set up in the Display.
+Control and Display run on the same machine. Control opens the Display and sends the whole state over `postMessage` on every change; the Display is a pure renderer. Control also persists to `localStorage`, so a refresh keeps your setup. The program feed is either the OBS Virtual Camera (`getUserMedia`) or a window capture (`getDisplayMedia`), set up in the Display.
 
 The teleprompter is the exception: script library, active content, playback settings, and transport commands all flow over **Firebase** (shared `pinpoint-abf21` project, under `prompter/{topic}`), the same as the standalone app did — Control writes, Display reads, independent of `postMessage`. The Topic string and the SHOW/HIDE + Full/Top/Bottom mode still travel over the regular `postMessage`/`localStorage` state between Control and its Display, since those are this app's own layout concerns — but Control also listens on Firebase (`prompter/{topic}/ui`) for remote show/hide and timer commands (from Companion or a raw HTTP request), and re-applies them locally through that same `postMessage`/`localStorage` path, exactly as if you'd clicked the button yourself.
 
