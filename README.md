@@ -1,6 +1,6 @@
-# Confidence Monitor
+# Mound Visit
 
-An in-studio talent confidence monitor. Shows the OBS **program feed** with local-only overlays — producer notes, a timer, a clock, and a full built-in teleprompter. The overlays render **only on this monitor** and never touch the OBS output, so the broadcast/vdo.ninja feed is unaffected.
+Mound Visit — an in-studio talent confidence monitor. Shows the OBS **program feed** with local-only overlays — producer notes, a timer, a clock, and a full built-in teleprompter. The overlays render **only on this monitor** and never touch the OBS output, so the broadcast/vdo.ninja feed is unaffected.
 
 Single self-contained HTML file. No build, no server. One dependency: Firebase (Realtime Database), used only for the teleprompter's script library — everything else is `postMessage`/`localStorage` between the two windows on this one machine.
 
@@ -11,7 +11,7 @@ Two ways to get the OBS program feed into the Display. **Option A (OBS Virtual C
 
 **Option A — OBS Virtual Camera (recommended)**
 1. In OBS, click **Start Virtual Camera**.
-2. Open the [page](https://chrisgrimm-jm.github.io/confidence-monitor/) (**Control**) → **Open Talent Display**.
+2. Open the [page](https://chrisgrimm-jm.github.io/mound-visit/) (**Control**) → **Open Talent Display**.
 3. In Control's **Feed** card, choose **OBS Virtual Camera** from the dropdown. It's picked automatically when found; the first time (or if the list is empty) press **Refresh** and allow camera access once. The Display connects to it, and **Reconnect** re-tries the same camera. The card shows the Display's live status ("feed live (camera: …)"). The choice is remembered, so next time the Display opens it connects by itself, and if the camera drops (e.g. the virtual camera was off) it retries every 3 seconds. It only ever connects the camera you chose — it never falls back to another one (so a laptop webcam can't end up on the talent monitor).
 4. Drag the Display to the talent's monitor and press **Fullscreen**. Drive everything from Control.
 
@@ -43,7 +43,7 @@ Each overlay has a **SHOW/HIDE** button and, where relevant, a position/mode dro
 ## Companion / hardware triggers
 A read can be put live from outside the browser — a Bitfocus Companion button, a Stream Deck, anything that can fire an HTTP request — by writing directly to the same Firebase Realtime Database the app already uses (open/unauthenticated, same as every other read/write this app does; no server of its own to run).
 
-For Companion specifically, there's also a real module — [confidence-monitor-companion](https://github.com/chrisgrimm-jm/confidence-monitor-companion) — with a dropdown of read names (no typing exact names into every button), a feedback that colors a button while its read is live, and variables. The raw HTTP approach below still works fine and needs no module install.
+For Companion specifically, there's also a real module — [mound-visit-companion](https://github.com/chrisgrimm-jm/mound-visit-companion) — with a dropdown of read names (no typing exact names into every button), a feedback that colors a button while its read is live, and variables. The raw HTTP approach below still works fine and needs no module install.
 
 In Companion, add a **Generic → HTTP Request** action per button:
 - Method: `PATCH`
@@ -62,7 +62,7 @@ Show/hide toggles and timer transport go through a separate queue (the Companion
 - Toggle an overlay: `{"t":"toggle","key":"<key>"}` — flips whatever it's currently set to, same `key` values as above.
 - Timer transport: `{"t":"timer","op":"start"}` — `op` is `start`, `pause`, or `reset`.
 
-Confidence Monitor applies each queued command and deletes it immediately, so the queue stays effectively empty in normal operation — there's nothing to clean up.
+Mound Visit applies each queued command and deletes it immediately, so the queue stays effectively empty in normal operation — there's nothing to clean up.
 
 Note this requires the Control page itself to be open in a browser tab — it's the one listening on Firebase and re-applying the change locally (the same way it already relays state to the Display), not something the Display or a server does on its own.
 
