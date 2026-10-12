@@ -13,6 +13,11 @@
   #control .sub{color:#8892a6;font-size:12px;margin-bottom:18px}
   .ctl2col{display:grid;grid-template-columns:1fr 440px;gap:20px;align-items:start}
   .card{background:#11151f;border:1px solid #232a3a;border-radius:10px;padding:14px 14px 16px;margin:12px 0}
+  #monPick{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:50}
+  #monPick .box{background:#11151f;border:1px solid #232a3a;border-radius:12px;padding:22px;max-width:540px;width:90%}
+  #monPick h3{margin:0 0 6px;font-family:"Bebas Neue",sans-serif;font-size:26px;letter-spacing:1px;color:var(--blue)}
+  #monPick .opt{display:block;width:100%;text-align:left;margin:8px 0;padding:12px 14px}
+  #monPick .foot{display:flex;gap:8px;margin-top:12px}
   .ctlHead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
   .ctlHeadBtns{display:flex;gap:8px;padding-top:6px}
   .dispDot{display:inline-block;width:10px;height:10px;border-radius:50%;background:#555;margin-right:8px;vertical-align:middle}
@@ -328,6 +333,13 @@
   </div>
 </div>
 
+<div id="monPick" class="hidden"><div class="box">
+  <h3>Which monitor is the talent screen?</h3>
+  <div class="hint" style="margin:0 0 6px">The big number is showing on each screen right now. Pick the one the talent looks at — the Display will go fullscreen there, and this is remembered (you can change it anytime in the Talent Display card).</div>
+  <div id="monPickList"></div>
+  <div class="foot"><button class="ghost" id="monPickIdent">Show numbers again</button><button class="ghost" id="monPickCancel" style="margin-left:auto">Cancel</button></div>
+</div></div>
+
 <!-- ===== DISPLAY MARKUP ===== -->
 <div id="display" class="hidden">
   <div id="testPattern"><div class="bars"><i style="background:#c0c0c0"></i><i style="background:#c0c000"></i><i style="background:#00c0c0"></i><i style="background:#00c000"></i><i style="background:#c000c0"></i><i style="background:#c00000"></i><i style="background:#0000c0"></i></div>
@@ -580,7 +592,7 @@ if(isDisplay){
   let disp=null, lastBeat=0, beatInfo=null;
   // real implementation attached below once the teleprompter block sets up its Firebase refs --
   // mirrors the show/hide flags (only) out to Firebase so Companion's feedback can read them back
-  let pushUiState=()=>{}, stageRender=()=>{};
+  let pushUiState=()=>{}, stageRender=()=>{}, ensureMonitor=async()=>true;   // ensureMonitor: asks which monitor on first open (desktop app)
   function send(){ localStorage.setItem(SAVE,JSON.stringify(state)); disp?.postMessage({type:"state",state},"*"); pushUiState(); stageRender(); }
   window.addEventListener("message",e=>{
     if(e.data&&e.data.type==="ready") send();
@@ -588,10 +600,13 @@ if(isDisplay){
     if(e.data&&e.data.type==="hb"){ lastBeat=Date.now(); beatInfo=e.data; showDisp(); }                   // Display heartbeat
   });
 
-  openDisplay.onclick=()=>{
+  openDisplay.onclick=async()=>{
     // already open (e.g. auto-opened by the desktop app, or Control was reloaded): bring it forward
     // instead of silently doing nothing; window.open on the same name just re-links to the open window
-    if(!disp||disp.closed) disp=window.open(location.pathname+"#display","cm_display","width=1280,height=720");
+    if(!disp||disp.closed){
+      if(!(await ensureMonitor())) return;      // desktop app, first time: ask which monitor the talent Display goes on
+      disp=window.open(location.pathname+"#display","cm_display","width=1280,height=720");
+    }
     if(window.cmDesktop) window.cmDesktop.showDisplay(); else if(disp) disp.focus();
     send();
   };
@@ -630,13 +645,30 @@ if(isDisplay){
     const sel=$("monSel");
     async function fill(){
       const r=await api.listDisplays(); if(!r) return;
-      const cur=sel.value; sel.innerHTML="";
+      sel.innerHTML="";
+      if(state.monId==null) sel.add(new Option("Choose a monitor…",""));     // never chosen: don't pretend a default is selected
       r.monitors.forEach(m=>sel.add(new Option("Monitor "+m.n+" — "+m.w+"×"+m.h+(m.primary?" (main)":"")+(m.hasControl?" · this screen (Control)":"")+(m.label?" · "+m.label:""), m.id)));
       sel.add(new Option("Windowed (don't fullscreen)","windowed"));
-      sel.value=String(state.monId==="windowed"?"windowed":(r.monitors.some(m=>m.id===state.monId)?state.monId:r.chosen));
-      if(!sel.value) sel.selectedIndex=0;
+      sel.value=state.monId==null?"":String(state.monId==="windowed"?"windowed":(r.monitors.some(m=>m.id===state.monId)?state.monId:r.chosen));
+      if(sel.value==="" && state.monId!=null) sel.selectedIndex=0;
     }
-    sel.onchange=()=>{ state.monId=sel.value==="windowed"?"windowed":+sel.value; api.setDisplayMonitor(state.monId); send(); };
+    sel.onchange=()=>{ if(sel.value==="") return; state.monId=sel.value==="windowed"?"windowed":+sel.value; api.setDisplayMonitor(state.monId); send(); fill(); };
+    // first time the Display is opened with 2+ monitors and no choice yet: ask, flashing each screen's number, then remember it
+    ensureMonitor=async()=>{
+      if(state.monId!=null) return true;
+      const r=await api.listDisplays(); if(!r||r.monitors.length<2) return true;     // nothing to choose between
+      return new Promise(resolve=>{
+        const list=$("monPickList"); list.innerHTML="";
+        const done=id=>{ $("monPick").classList.add("hidden"); if(id===null) return resolve(false);
+          state.monId=id; api.setDisplayMonitor(id); send(); fill(); resolve(true); };
+        r.monitors.forEach(m=>{ const b=document.createElement("button"); b.className="opt";
+          b.textContent="Monitor "+m.n+" — "+m.w+"×"+m.h+(m.primary?" (main)":"")+(m.hasControl?" — this screen (Control)":"")+(m.label?" · "+m.label:"");
+          b.onclick=()=>done(m.id); list.appendChild(b); });
+        const w=document.createElement("button"); w.className="opt ghost"; w.textContent="Windowed (don't fullscreen)"; w.onclick=()=>done("windowed"); list.appendChild(w);
+        $("monPickIdent").onclick=()=>api.identifyDisplays(); $("monPickCancel").onclick=()=>done(null);
+        $("monPick").classList.remove("hidden"); api.identifyDisplays();
+      });
+    };
     $("monIdent").onclick=()=>api.identifyDisplays();
     window.addEventListener("focus",fill);      // monitors may have been plugged in/out since
     fill().then(()=>{ if(state.monId!=null) api.setDisplayMonitor(state.monId); });   // tell the app the remembered choice before it auto-opens the Display
