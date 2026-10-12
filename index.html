@@ -268,6 +268,10 @@
     <h2><span><span class="dispDot" id="dispDot"></span>Talent Display</span> <span class="hctl"><button class="tog2" id="displayShow">HIDE</button></span></h2>
     <div class="hint" id="dispState" style="margin:0">Display not open — press Open Talent Display.</div>
     <input type="text" id="studioName" placeholder="Studio name (shown on the test pattern)" style="margin-top:8px">
+    <div class="row" id="monRow" style="display:none">
+      <select class="pos" id="monSel" style="flex:1" title="Which monitor the talent Display goes on"></select>
+      <button class="ghost" id="monIdent" title="Flash each monitor's number for 3 seconds">Identify</button>
+    </div>
     <div class="hint">HIDE blanks the whole Display and shows a test pattern (so you can tell the monitor is alive). The test pattern also appears by itself whenever there's no feed.</div>
   </div>
 
@@ -569,7 +573,7 @@ if(isDisplay){
     timerShow:true, timerPos:"tc", timerSize:64,
     clockShow:true, clockSize:34,
     promptShow:false, promptMode:"full", promptTopic:"adread",
-    camId:"", camReq:0, displayShow:true, studio:"", prodXY:null, timerXY:null, clockXY:null,
+    camId:"", camReq:0, displayShow:true, studio:"", monId:null, prodXY:null, timerXY:null, clockXY:null,
     timer:{mode:"down", running:false, remaining:5*60000, endAt:0, elapsed:0, startAt:0}
   }, JSON.parse(localStorage.getItem(SAVE)||"{}"));
 
@@ -617,6 +621,26 @@ if(isDisplay){
       : "Display not open — press Open Talent Display.";
   }
   setInterval(showDisp,1000); showDisp();
+
+  // Which monitor the talent Display goes on -- desktop app only (a web page can't place windows on a chosen screen;
+  // in a browser, drag the Display window to the monitor and press Fullscreen).
+  (function(){
+    const api=window.cmDesktop; if(!api||!api.listDisplays) return;
+    $("monRow").style.display="";
+    const sel=$("monSel");
+    async function fill(){
+      const r=await api.listDisplays(); if(!r) return;
+      const cur=sel.value; sel.innerHTML="";
+      r.monitors.forEach(m=>sel.add(new Option("Monitor "+m.n+" — "+m.w+"×"+m.h+(m.primary?" (main)":"")+(m.hasControl?" · this screen (Control)":"")+(m.label?" · "+m.label:""), m.id)));
+      sel.add(new Option("Windowed (don't fullscreen)","windowed"));
+      sel.value=String(state.monId==="windowed"?"windowed":(r.monitors.some(m=>m.id===state.monId)?state.monId:r.chosen));
+      if(!sel.value) sel.selectedIndex=0;
+    }
+    sel.onchange=()=>{ state.monId=sel.value==="windowed"?"windowed":+sel.value; api.setDisplayMonitor(state.monId); send(); };
+    $("monIdent").onclick=()=>api.identifyDisplays();
+    window.addEventListener("focus",fill);      // monitors may have been plugged in/out since
+    fill().then(()=>{ if(state.monId!=null) api.setDisplayMonitor(state.monId); });   // tell the app the remembered choice before it auto-opens the Display
+  })();
 
   // Feed source: the camera is chosen here; the Display (which owns the video stream) connects to it
   const camSel=$("ctlCamSel");
