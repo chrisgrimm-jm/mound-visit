@@ -266,8 +266,7 @@
 
   <div class="colRight">
   <button class="big" id="openDisplay">Open Talent Display →</button>
-  <div class="hint">Opens the talent Display. Pick your feed below (the OBS Virtual Camera), then drag the Display to the
-    talent's screen and press <b>Fullscreen</b>. No camera? Use <b>Capture Feed</b> in the Display's toolbar instead.</div>
+  <div class="hint">Opens the talent Display. Pick your feed below (the OBS Virtual Camera), choose the talent's monitor in the Talent Display card (Chrome/Edge: press <b>Allow</b> once), then press <b>Fullscreen</b> on the Display. No camera? Use <b>Capture Feed</b> in the Display's toolbar instead.</div>
 
   <div class="card">
     <h2><span><span class="dispDot" id="dispDot"></span>Talent Display</span> <span class="hctl"><button class="tog2" id="displayShow">HIDE</button></span></h2>
@@ -275,6 +274,7 @@
     <input type="text" id="studioName" placeholder="Studio name (shown on the test pattern)" style="margin-top:8px">
     <div class="row" id="monRow" style="display:none">
       <select class="pos" id="monSel" style="flex:1" title="Which monitor the talent Display goes on"></select>
+      <button class="ghost" id="monAllow" style="display:none" title="Chrome/Edge will ask to manage windows on your displays">Allow</button>
       <button class="ghost" id="monIdent" title="Flash each monitor's number for 3 seconds">Identify</button>
     </div>
     <div class="hint">HIDE blanks the whole Display and shows a test pattern (so you can tell the monitor is alive). The test pattern also appears by itself whenever there's no feed.</div>
@@ -592,6 +592,23 @@ if(isDisplay){
   let disp=null, lastBeat=0, beatInfo=null;
   // real implementation attached below once the teleprompter block sets up its Firebase refs --
   // mirrors the show/hide flags (only) out to Firebase so Companion's feedback can read them back
+  // Chromium browser stand-in for the desktop bridge: the Window Management API lists the monitors and lets
+  // window.open place the Display on one (null where unsupported, e.g. Firefox/Safari, or in the desktop app)
+  const webMon=(window.cmDesktop||!window.getScreenDetails)?null:(()=>{
+    let sd=null;
+    const list=()=>[...sd.screens].sort((a,b)=>a.left-b.left||a.top-b.top).map((s,i)=>({id:s.left*100000+s.top,n:i+1,w:s.width,h:s.height,primary:s.isPrimary,hasControl:s===sd.currentScreen,label:s.label,s}));
+    const box=s=>"popup,left="+s.left+",top="+s.top+",width="+s.width+",height="+s.height;
+    return {
+      granted:()=>!!sd,
+      grant:async()=>{ try{ sd=sd||await window.getScreenDetails(); return true; }catch(e){ return false; } },
+      place:()=>{ const m=sd&&list().find(m=>m.id===state.monId); return m?box(m.s):""; },
+      listDisplays:async()=>{ if(!sd) return null; const l=list(); return {monitors:l,chosen:(l.find(m=>!m.hasControl)||l[0]).id}; },
+      setDisplayMonitor:id=>{ const m=sd&&disp&&!disp.closed&&list().find(m=>m.id===id);   // Display already open: move it (a fullscreen one has to leave fullscreen first)
+        if(m){ try{ disp.document.exitFullscreen?.(); }catch(e){} disp.moveTo(m.s.left,m.s.top); disp.resizeTo(m.s.width,m.s.height); } },
+      identifyDisplays:()=>list().forEach(m=>{ const w=window.open("","_blank",box(m.s)); if(!w) return;   // popup blockers may allow only the first
+        w.document.write('<body style="margin:0;background:#000;color:#fff;font:900 60vmin Impact,sans-serif;display:grid;place-items:center">'+m.n); setTimeout(()=>w.close(),3000); })
+    };
+  })();
   let pushUiState=()=>{}, stageRender=()=>{}, ensureMonitor=async()=>true;   // ensureMonitor: asks which monitor on first open (desktop app)
   function send(){ localStorage.setItem(SAVE,JSON.stringify(state)); disp?.postMessage({type:"state",state},"*"); pushUiState(); stageRender(); }
   window.addEventListener("message",e=>{
@@ -604,8 +621,9 @@ if(isDisplay){
     // already open (e.g. auto-opened by the desktop app, or Control was reloaded): bring it forward
     // instead of silently doing nothing; window.open on the same name just re-links to the open window
     if(!disp||disp.closed){
-      if(!(await ensureMonitor())) return;      // desktop app, first time: ask which monitor the talent Display goes on
-      disp=window.open(location.pathname+"#display","cm_display","width=1280,height=720");
+      if(webMon&&!webMon.granted()) await webMon.grant();     // browser: one-time "manage windows on all your displays" prompt
+      if(!(await ensureMonitor())) return;      // first time: ask which monitor the talent Display goes on
+      disp=window.open(location.pathname+"#display","cm_display",webMon&&webMon.place()||"width=1280,height=720");
     }
     if(window.cmDesktop) window.cmDesktop.showDisplay(); else if(disp) disp.focus();
     send();
@@ -637,15 +655,21 @@ if(isDisplay){
   }
   setInterval(showDisp,1000); showDisp();
 
-  // Which monitor the talent Display goes on -- desktop app only (a web page can't place windows on a chosen screen;
-  // in a browser, drag the Display window to the monitor and press Fullscreen).
+  // Which monitor the talent Display goes on -- desktop app, or Chrome/Edge via the Window Management API
+  // (other browsers can't place windows on a chosen screen: drag the Display over and press Fullscreen).
   (function(){
-    const api=window.cmDesktop; if(!api||!api.listDisplays) return;
+    const api=window.cmDesktop||webMon; if(!api||!api.listDisplays) return;
     $("monRow").style.display="";
+    if(webMon){      // browser: screen access needs a click (or an earlier "allow") before monitors can be listed
+      const allow=$("monAllow"); allow.style.display="";
+      allow.onclick=async()=>{ if(await webMon.grant()){ allow.style.display="none"; fill(); } };
+      navigator.permissions?.query({name:"window-management"}).then(p=>{ if(p.state==="granted") allow.click(); }).catch(()=>{});
+    }
     const sel=$("monSel");
     async function fill(){
-      const r=await api.listDisplays(); if(!r) return;
-      sel.innerHTML="";
+      const r=await api.listDisplays();
+      if(!r){ sel.innerHTML=""; sel.add(new Option("Allow monitor access to choose →","")); return; }
+      sel.innerHTML=""; $("monAllow").style.display="none";
       if(state.monId==null) sel.add(new Option("Choose a monitor…",""));     // never chosen: don't pretend a default is selected
       r.monitors.forEach(m=>sel.add(new Option("Monitor "+m.n+" — "+m.w+"×"+m.h+(m.primary?" (main)":"")+(m.hasControl?" · this screen (Control)":"")+(m.label?" · "+m.label:""), m.id)));
       sel.add(new Option("Windowed (don't fullscreen)","windowed"));
