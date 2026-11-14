@@ -107,10 +107,16 @@
   #promptCtl .toggles{display:flex;flex-direction:column;gap:8px}
   #promptCtl .tg{display:flex;align-items:center;justify-content:space-between;font-size:13px;color:var(--pp-txt)}
   #promptCtl .tg input{width:18px;height:18px;accent-color:var(--pp-accent)}
-  #promptCtl #ppPrevWrap{background:#000;border-radius:8px;overflow:hidden;height:200px;position:relative}
+  #promptCtl #ppPrevWrap{background:#000;border-radius:8px;overflow:hidden;position:relative;aspect-ratio:16/9}
+  #promptCtl #ppMini{position:absolute;left:0;top:0;transform-origin:0 0}
+  #promptCtl #ppPrevView{position:absolute;inset:0;overflow:hidden}
+  #promptCtl #ppPrevView.top{bottom:auto;height:58%} #promptCtl #ppPrevView.bottom{top:auto;bottom:0;height:58%}
   #promptCtl #ppPrevFlip{position:absolute;inset:0;transform-origin:center}
-  #promptCtl #ppPrevPrompt{padding:48% 8%;color:#fff;font-size:15px;line-height:1.4;font-weight:600;will-change:transform}
-  #promptCtl #ppPrevLine{position:absolute;left:0;right:0;top:40%;border-top:2px solid rgba(255,90,90,.5);pointer-events:none}
+  /* same type rules as the Display's #promptText, so lines wrap identically */
+  #promptCtl #ppPrevPrompt{font-family:'Helvetica Neue',Arial,system-ui,sans-serif;font-weight:600;color:#fff;will-change:transform}
+  #promptCtl #ppPrevPrompt :is(p,div,li,h1,h2,h3,h4){margin:0 0 .55em 0} #promptCtl #ppPrevPrompt :is(ul,ol){margin:0 0 .55em 1.3em} #promptCtl #ppPrevPrompt :is(b,strong){font-weight:900}
+  #promptCtl #ppPrevLine{position:absolute;left:0;right:0;top:40%;border-top:2px solid rgba(255,90,90,.55);pointer-events:none}
+  #promptCtl #ppPrevOff{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#667;font-size:12px;letter-spacing:1px}
   #promptCtl .note{font-size:11.5px;color:var(--pp-dim);margin-top:6px;line-height:1.4}
   #promptCtl a{color:var(--pp-accent)}
   #promptCtl .msg{font-size:12px;margin-top:6px;min-height:15px}
@@ -215,8 +221,8 @@
         </div>
 
         <div class="panel">
-          <h2>Live Preview <span style="text-transform:none;font-weight:400">(approximate — the Display is authoritative)</span></h2>
-          <div id="ppPrevWrap"><div id="ppPrevFlip"><div id="ppPrevPrompt"></div></div><div id="ppPrevLine"></div></div>
+          <h2>Live Preview <span style="text-transform:none;font-weight:400" id="ppPrevSrc"></span></h2>
+          <div id="ppPrevWrap"><div id="ppMini"><div id="ppPrevView"><div id="ppPrevFlip"><div id="ppPrevPrompt"></div></div><div id="ppPrevLine"></div></div></div><div id="ppPrevOff" class="hidden">TELEPROMPTER HIDDEN</div></div>
         </div>
       </div>
 
@@ -498,6 +504,7 @@ if(isDisplay){
   function ppTransform(){
     el.promptFlip.style.transform="scale("+(pp.settings.mirrorH?-1:1)+","+(pp.settings.mirrorV?-1:1)+")";
     el.promptText.style.transform="translateY("+(-Math.round(pp.pos))+"px)";
+    if(window.opener) window.opener.postMessage({type:"pp",pos:Math.round(pp.pos)},"*");   // Control's Live Preview follows this exactly
   }
   function ppApplySettings(){
     el.promptView.style.background=pp.settings.bg;
@@ -544,6 +551,7 @@ if(isDisplay){
     } else ppLastTime=0;
   }
   (function loop(){ ppAdvance(); requestAnimationFrame(loop); })();
+  setInterval(()=>{ if(window.opener) window.opener.postMessage({type:"pp",pos:Math.round(pp.pos)},"*"); },1000);   // keeps a reloaded Control's preview following while paused
   setInterval(ppAdvance, 33);
   window.addEventListener("resize",()=>{ ppClamp(); ppTransform(); });
 
@@ -594,7 +602,7 @@ if(isDisplay){
     timer:{mode:"down", running:false, remaining:5*60000, endAt:0, elapsed:0, startAt:0}
   }, JSON.parse(localStorage.getItem(SAVE)||"{}"));
 
-  let disp=null, lastBeat=0, beatInfo=null;
+  let disp=null, lastBeat=0, beatInfo=null, dispPos=0, dispPosAt=0;
   // real implementation attached below once the teleprompter block sets up its Firebase refs --
   // mirrors the show/hide flags (only) out to Firebase so Companion's feedback can read them back
   // Chromium browser stand-in for the desktop bridge: the Window Management API lists the monitors and lets
@@ -619,6 +627,7 @@ if(isDisplay){
   window.addEventListener("message",e=>{
     if(e.data&&e.data.type==="ready") send();
     if(e.data&&e.data.type==="feed") document.getElementById("ctlFeedState").textContent=e.data.text;   // Display's feed status
+    if(e.data&&e.data.type==="pp"){ dispPos=e.data.pos; dispPosAt=Date.now(); }
     if(e.data&&e.data.type==="hb"){ lastBeat=Date.now(); beatInfo=e.data; showDisp(); }                   // Display heartbeat
   });
 
@@ -925,6 +934,10 @@ if(isDisplay){
     // declared early: bindRange()'s immediate upd() call reaches applyPreview() before later code runs
     const pv=$("ppPrevPrompt"), pf=$("ppPrevFlip"), pw=$("ppPrevWrap");
     let pvPos=0, pvLast=0, pvMaxV=0, seekPos=0, seekTimer=null;
+    // Live Preview canvas = the Display's size (from its heartbeat), 1920×1080 until one is open
+    let miniKey="";
+    const live=()=>Date.now()-lastBeat<5000;
+    const dW=()=>live()&&beatInfo.w||1920, dH=()=>live()&&beatInfo.h||1080;
 
     function pushSettings(){ if(ready) settingsRef.set(st); applyPreview(); autosaveLive(); }
     // appearance/transport changes while a script is live (going live via the library's own
@@ -1338,23 +1351,40 @@ if(isDisplay){
     $("ppMv").onchange=function(){ st.mirrorV=this.checked; pushSettings(); };
     $("ppSl").onchange=function(){ st.showLine=this.checked; pushSettings(); };
 
+    // the Display's prompt laid out at the Display's own pixel size, then scaled down, so every line wraps
+    // and sits exactly where the talent sees it
+    function layoutMini(){
+      const k=pw.clientWidth/dW(), key=[dW(),dH(),pw.clientWidth,state.promptMode,state.promptShow,st.margin].join();
+      if(key===miniKey) return; miniKey=key;
+      pw.style.aspectRatio=dW()+"/"+dH();
+      const m=$("ppMini"); m.style.width=dW()+"px"; m.style.height=dH()+"px"; m.style.transform="scale("+k+")";
+      const v=$("ppPrevView"); v.classList.remove("top","bottom"); if(state.promptMode==="top"||state.promptMode==="bottom") v.classList.add(state.promptMode);
+      m.style.visibility=state.promptShow?"":"hidden"; $("ppPrevOff").classList.toggle("hidden",!!state.promptShow);
+      pv.style.paddingTop=pv.style.paddingBottom=(0.45*dH())+"px";                        // Display: 45vh
+      pv.style.paddingLeft=pv.style.paddingRight=(st.margin*dW()/100)+"px";               // Display: margin vw
+      pvMax(); drawPrev();
+    }
     function applyPreview(){
       if(!pw) return;
-      pw.style.background=st.bg; pv.style.color=st.fg;
-      pv.style.fontSize=Math.max(10, st.fontSize*0.22)+"px";
+      $("ppPrevView").style.background=st.bg; pv.style.color=st.fg;
+      pv.style.fontSize=st.fontSize+"px";
       pv.style.lineHeight=st.lineHeight;
-      pv.style.paddingLeft=st.margin+"%"; pv.style.paddingRight=st.margin+"%";
+      miniKey=""; layoutMini();
       pf.style.transform="scale("+(st.mirrorH?-1:1)+","+(st.mirrorV?-1:1)+")";
       $("ppPrevLine").style.display=st.showLine?"block":"none";
       pv.innerHTML=lastHtml||'<span style="opacity:.4">— nothing on prompter —</span>';
       pvMax(); pvPos=seekPos*pvMaxV; drawPrev();
     }
-    function pvMax(){ pvMaxV=Math.max(0, pv.scrollHeight - pw.clientHeight); }
+    function pvMax(){ pvMaxV=Math.max(0, pv.scrollHeight - $("ppPrevView").clientHeight); }
     function drawPrev(){ if(pvPos<0)pvPos=0; if(pvPos>pvMaxV)pvPos=pvMaxV; pv.style.transform="translateY("+(-Math.round(pvPos))+"px)"; }
-    function nudgePreview(dy){ pvPos+=dy*0.28; drawPrev(); }
+    function nudgePreview(dy){ pvPos+=dy; drawPrev(); }
     function pvAdvance(){
-      const now=(window.performance&&performance.now)?performance.now():Date.now();
-      if(st.playing){ if(pvLast){ pvPos += st.speed*0.28*(now-pvLast)/1000; pvMax(); drawPrev(); } pvLast=now; }
+      layoutMini();
+      const now=(window.performance&&performance.now)?performance.now():Date.now(), following=Date.now()-dispPosAt<2500;
+      $("ppPrevSrc").textContent=following?"(live from the talent Display)":"(estimated — talent Display not open)";
+      if(following){ pvPos=dispPos; pvMax(); drawPrev(); pvLast=0; return; }
+      // no Display open: run the same clock locally
+      if(st.playing){ if(pvLast){ pvPos += st.speed*(now-pvLast)/1000; pvMax(); drawPrev(); } pvLast=now; }
       else pvLast=0;
     }
     (function loop(){ pvAdvance(); requestAnimationFrame(loop); })();
