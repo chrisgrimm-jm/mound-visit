@@ -405,10 +405,10 @@ if(isDisplay){
   let who={user:"",host:"",ips:[]};
   if(window.cmDesktop&&window.cmDesktop.hostInfo) window.cmDesktop.hostInfo().then(i=>{ if(i){ who=i; paint(); beat(); } }).catch(()=>{});
   function paint(){
-    const off=!!state&&state.displayShow===false, hasFeed=!!el.feed.srcObject;
+    const off=!!state&&state.displayShow===false, hasFeed=!!el.feed.srcObject, noFeed=!!state&&state.camId==="none";
     displayEl.classList.toggle("off",off);
     el.feed.classList.toggle("hidden",!hasFeed);
-    patternEl.classList.toggle("hidden",!(off||!hasFeed));
+    patternEl.classList.toggle("hidden",!(off||(!hasFeed&&!noFeed)));   // "No feed" mode: plain black + teleprompter while shown
     tpWho.textContent=((state&&state.studio)||who.user||who.host||"").toUpperCase();   // typed studio name wins over the PC user name
     tpSub.textContent="TALENT DISPLAY · "+(off?"HIDDEN":"NO FEED")+" · "+innerWidth+"×"+innerHeight;
     tpNet.textContent=[who.host,(who.ips||[]).slice(0,2).join(" / ")].filter(Boolean).join(" · ");   // computer name · LAN IP (desktop app only)
@@ -424,7 +424,7 @@ if(isDisplay){
     if((state.camReq||0)!==seenReq){ seenReq=state.camReq||0; if(state.camId) startCam(state.camId); }
   }
 
-  window.addEventListener("message",e=>{ if(e.data&&e.data.type==="state"){ state=e.data.state; applyFeedState(); render(); }});
+  window.addEventListener("message",e=>{ if(e.data&&e.data.type==="state"){ state=e.data.state; applyFeedState(); render(); paint(); }});
   if(window.opener) window.opener.postMessage({type:"ready"},"*");
   paint(); beat();
 
@@ -454,12 +454,17 @@ if(isDisplay){
   const gum=v=>navigator.mediaDevices.getUserMedia({video:Object.assign({width:{ideal:1920},height:{ideal:1080},frameRate:{ideal:60}},v),audio:false});
   async function startCam(id){
     clearTimeout(retry);
+    if(id==="none"){ localStorage.setItem("cm_cam","none"); setFeed(null,"no feed — teleprompter only"); return; }
     try{
       // exactly the chosen device -- never fall back to some other camera (a laptop webcam would put a face on the talent monitor)
       const s=await gum({deviceId:{exact:id}});
       localStorage.setItem("cm_cam",id);
       const label=((await navigator.mediaDevices.enumerateDevices()).find(d=>d.deviceId===id)||{}).label||"camera";
-      setFeed(s,"feed live (camera: "+label+")");
+      const set=s.getVideoTracks()[0].getSettings(), base="feed live (camera: "+label+", "+set.width+"×"+set.height+")";
+      setFeed(s,base);
+      let n=0; const tick=()=>{ if(feedStream!==s) return; n++; el.feed.requestVideoFrameCallback(tick); };
+      el.feed.requestVideoFrameCallback(tick);
+      const meter=setInterval(()=>{ if(feedStream!==s) return clearInterval(meter); report(base+" · "+n+" fps"); n=0; },1000);
       s.getVideoTracks()[0].onended=()=>{ setFeed(null,"camera lost — retrying…"); retry=setTimeout(()=>startCam(id),3000); };
     }catch(err){
       report(err && err.name==="NotAllowedError"
@@ -711,9 +716,10 @@ if(isDisplay){
     const named=cams.filter(d=>d.label);
     camSel.innerHTML="";
     camSel.add(new Option(named.length?"— choose a camera —":"Press Refresh to allow camera access",""));
+    camSel.add(new Option("No feed — teleprompter only","none"));
     named.forEach(d=>camSel.add(new Option(d.label,d.deviceId)));
     const want=state.camId||localStorage.getItem("cm_cam")||"";
-    const pick=named.find(d=>d.deviceId===want)||(!want&&named.find(d=>/obs virtual/i.test(d.label)));
+    const pick=want==="none"?{deviceId:"none"}:named.find(d=>d.deviceId===want)||(!want&&named.find(d=>/obs virtual/i.test(d.label)));
     if(pick){ camSel.value=pick.deviceId; if(pick.deviceId!==state.camId){ state.camId=pick.deviceId; send(); } }
   }
   const reqCam=()=>{ state.camReq=(state.camReq||0)+1; send(); };
