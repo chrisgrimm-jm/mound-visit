@@ -1453,6 +1453,7 @@ if(isDisplay){
     //   show a panel:  {"t":"show","key":"prodShow|timerShow|clockShow|promptShow","on":true}
     //   toggle a panel: {"t":"toggle","key":"<same keys as above>"}
     //   timer control: {"t":"timer","op":"start|pause|reset"}
+    //   prompter Back/Fwd: {"t":"nudge","dir":-1|1}  (same as the Back/Fwd buttons)
     // A real queue (push() + child_added, each command removed once applied) rather than a single
     // mutable value -- two commands landing close together (e.g. show X then hide Y from two
     // different buttons) used to collapse into "whichever wrote last wins", silently dropping the
@@ -1470,6 +1471,7 @@ if(isDisplay){
           else if(v.op==="pause") timerPause();
           else if(v.op==="reset") timerReset();
         }
+        else if(v.t==="nudge") $(v.dir<0?"ppBack":"ppFwd").click();
       };
       uiqRef.on("child_added", handler);
       uiUnsub = ()=>uiqRef.off("child_added", handler);
