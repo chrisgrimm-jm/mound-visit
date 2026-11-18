@@ -1507,9 +1507,18 @@ if(isDisplay){
       ready=false; library=[]; editingId=null; activeId=null; lastHtml=""; contentVer=0; cmdN=0; lastTriggerN=null;
       clearTrim();
       state.promptTopic=topic; send();
+      publishHostTopic();
       hydrateAndGo();
     }
     $("promptTopic").addEventListener("change",()=>setTopic($("promptTopic").value));
+
+    // desktop app only: record "this PC is on topic X" under its host name, so Companion on the same PC can follow it (Topic left blank)
+    function publishHostTopic(){
+      if(window.cmDesktop&&window.cmDesktop.hostInfo) window.cmDesktop.hostInfo().then(i=>{
+        if(i&&i.host) _ppdb.ref("mv_hosts/"+ppKey(i.host.toLowerCase())).set({topic, ts:firebase.database.ServerValue.TIMESTAMP});
+      }).catch(()=>{});
+    }
+    publishHostTopic();
 
     hydrateAndGo();
   })();
