@@ -247,8 +247,8 @@
           </div>
           <div class="btns" style="justify-content:center">
             <button id="ppToTop">⤒ Top</button>
-            <button id="ppBack">◂ Back</button>
-            <button id="ppFwd">Fwd ▸</button>
+            <button id="ppBack" title="Hotkey: ↑ or Page Up">◂ Back</button>
+            <button id="ppFwd" title="Hotkey: ↓ or Page Down">Fwd ▸</button>
             <button id="ppToEnd">End ⤓</button>
           </div>
           <label>Scroll speed <span class="val" id="ppSpeedV"></span></label>
@@ -1345,6 +1345,12 @@ if(isDisplay){
     $("ppToEnd").onclick=()=>{ command("seek",{frac:1}); seekPos=1; $("ppSeek").value=1000; applyPreview(); autosaveLive(); };
     $("ppBack").onclick=()=>{ command("nudge",{dy:-120}); nudgePreview(-120); };
     $("ppFwd").onclick=()=>{ command("nudge",{dy:120}); nudgePreview(120); };
+    // hotkeys: ↓ / PageDown = Fwd, ↑ / PageUp = Back (PageUp/Down is what presentation clickers send); ignored while typing
+    document.addEventListener("keydown",e=>{
+      const t=e.target; if(t.isContentEditable||/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)||e.metaKey||e.ctrlKey||e.altKey) return;
+      const b={ArrowDown:"ppFwd",PageDown:"ppFwd",ArrowUp:"ppBack",PageUp:"ppBack"}[e.key];
+      if(b){ e.preventDefault(); $(b).click(); }
+    });
 
     function bindRange(id,valId,fmt,apply){
       const el=$(id), v=$(valId);
