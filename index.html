@@ -52,6 +52,18 @@
   input[type=range]{width:100%}
   button.tog2{font-family:"DM Mono",monospace;font-size:11px;letter-spacing:1px;padding:5px 14px;border-radius:6px;background:#2a3348;color:#c7cede}
   button.tog2.on{background:#1f7a3d;color:#fff}
+  /* show/hide pair: each button does exactly what it says; the one matching the current state is dimmed */
+  .sh{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+  .sh button{font-family:"DM Mono",monospace;font-size:11px;letter-spacing:1px;padding:5px 12px;border-radius:6px}
+  .sh button.s{background:#1f7a3d} .sh button.h{background:var(--red)}
+  .sh button:disabled{opacity:.25;cursor:default}
+  .sh .st{font-family:"DM Mono",monospace;font-size:11px;letter-spacing:1px;color:#6b768c;min-width:34px;text-align:right}
+  .sh .st.on{color:#2fd16f}
+  .hctl .sh,h2 > .sh{flex-wrap:nowrap;white-space:nowrap} .hctl .sh button{padding:5px 9px}
+  .sh.big{display:flex;margin-top:4px}
+  .sh.big button{flex:1;font-family:"Bebas Neue",sans-serif;font-size:24px;padding:14px;border-radius:8px}
+  .sh.big .st{order:3;width:100%;text-align:left;font-size:13px}
+  .sh.big .st::after{content:" talent screen"}
   .hctl{display:flex;gap:8px;align-items:center}
   select.pos{background:#0a0e16;border:1px solid #2a3348;color:#c7cede;border-radius:6px;padding:5px 6px;font-family:"DM Mono",monospace;font-size:11px;cursor:pointer}
   .pl{display:block;font-family:"Bebas Neue",sans-serif;font-size:13px;letter-spacing:1px;color:#8892a6;margin:10px 0 4px}
@@ -174,7 +186,8 @@
   <div class="ctl2col">
   <div class="colLeft">
   <div class="card" id="promptCtl">
-    <h2>Teleprompter <span class="hctl"><button class="tog2" id="promptShow">SHOW</button></span></h2>
+    <h2>Teleprompter</h2>
+    <div class="sh big" id="promptShow"></div>
     <div class="row">
       <span class="seg" id="promptModeSeg"><button data-pmode="full" class="on">Full screen</button><button data-pmode="top">Top band</button><button data-pmode="bottom">Bottom band</button></span>
     </div>
@@ -264,7 +277,7 @@
             <label class="tg">Show reading line <input type="checkbox" id="ppSl" checked></label>
           </div>
         </div>
-        <div class="note">Rendered on the Display when Teleprompter is <b>SHOWING</b> above, in Full / Top band / Bottom band.</div>
+        <div class="note">Rendered on the Display when Teleprompter is set to <b>SHOW</b> above, in Full / Top band / Bottom band.</div>
       </div>
     </div>
   </div>
@@ -275,7 +288,7 @@
   <div class="hint">Opens the talent Display. Pick your feed below (the OBS Virtual Camera), choose the talent's monitor in the Talent Display card (Chrome/Edge: press <b>Allow</b> once), then press <b>Fullscreen</b> on the Display. No camera? Use <b>Capture Feed</b> in the Display's toolbar instead.</div>
 
   <div class="card">
-    <h2><span><span class="dispDot" id="dispDot"></span>Talent Display</span> <span class="hctl"><button class="tog2" id="displayShow">HIDE</button></span></h2>
+    <h2><span><span class="dispDot" id="dispDot"></span>Talent Display</span> <span class="hctl"><span id="displayShow"></span></span></h2>
     <div class="hint" id="dispState" style="margin:0">Display not open — press Open Talent Display.</div>
     <input type="text" id="studioName" placeholder="Studio name (shown on the test pattern)" style="margin-top:8px">
     <div class="row" id="monRow" style="display:none">
@@ -296,7 +309,7 @@
   </div>
 
   <div class="card">
-    <h2>Producer Note <span class="hctl"><select class="pos" id="prodPos"></select><button class="tog2" id="prodShow">HIDE</button></span></h2>
+    <h2>Producer Note <span class="hctl"><select class="pos" id="prodPos"></select><span id="prodShow"></span></span></h2>
     <input type="text" id="prodText" placeholder="Private aside to talent…">
     <div class="row">
       <button class="ghost" id="prodClear">Clear</button>
@@ -305,7 +318,7 @@
   </div>
 
   <div class="card">
-    <h2>Timer <span class="hctl"><select class="pos" id="timerPos"></select><button class="tog2" id="timerShow">HIDE</button></span></h2>
+    <h2>Timer <span class="hctl"><select class="pos" id="timerPos"></select><span id="timerShow"></span></span></h2>
     <div class="row">
       <span class="seg" id="timerMode"><button data-mode="down" class="on">Countdown</button><button data-mode="up">Count up</button></span>
     </div>
@@ -322,7 +335,7 @@
   </div>
 
   <div class="card">
-    <h2>Clock <button class="tog2" id="clockShow">HIDE</button></h2>
+    <h2>Clock <span id="clockShow"></span></h2>
     <div class="row">
       <span style="font-size:11px;color:#8892a6">Size</span><input class="time-in" type="number" id="clockSize" min="14" max="80">
     </div>
@@ -738,11 +751,14 @@ if(isDisplay){
   navigator.mediaDevices.addEventListener("devicechange",()=>refreshCams(false));   // e.g. OBS Virtual Camera started
   refreshCams(false);
 
-  // show/hide toggle buttons: label = current state (green "● SHOWING" / grey "HIDDEN"), click flips it
+  // SHOW / HIDE button pairs: each button does what it says, the one matching the current state is dimmed, plus an ON/OFF status
   const showPaint={};
   function togBtn(id,key){
-    const b=$(id), paint=()=>{ b.textContent=state[key]?"● SHOWING":"HIDDEN"; b.title=state[key]?"Click to hide":"Click to show"; b.classList.toggle("on",!!state[key]); };
-    b.onclick=()=>{ state[key]=!state[key]; paint(); send(); }; paint();
+    const w=$(id); w.classList.add("sh");
+    w.innerHTML='<span class="st"></span><button class="s">SHOW ▶</button><button class="h">HIDE ■</button>';
+    const [st,sb,hb]=w.children, set=v=>{ state[key]=v; paint(); send(); };
+    const paint=()=>{ const on=!!state[key]; sb.disabled=on; hb.disabled=!on; st.textContent=on?"● ON":"OFF"; st.classList.toggle("on",on); };
+    sb.onclick=()=>set(true); hb.onclick=()=>set(false); paint();
     showPaint[key]=paint;
   }
   ["displayShow","prodShow","timerShow","clockShow","promptShow"].forEach(id=>togBtn(id,id));
