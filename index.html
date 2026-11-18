@@ -509,7 +509,7 @@ if(isDisplay){
   function setPGrid(elm,pos){ PGRID.forEach(p=>elm.classList.remove("p-"+p)); elm.classList.add("p-"+(pos||"tl")); }
 
   /* ---- teleprompter scroll engine (ported from the standalone Prompter display) ---- */
-  const pp={ pos:0, haveContent:false, contentVer:-1, lastCmdN:null,
+  const pp={ pos:0, glide:0, haveContent:false, contentVer:-1, lastCmdN:null,
     settings:{playing:false,speed:70,fontSize:60,lineHeight:1.4,bg:"#0b0b0b",fg:"#ffffff",margin:8,mirrorH:false,mirrorV:false,showLine:true},
     topic:null, ref:null };
   function ppMaxPos(){ return Math.max(0, el.promptText.scrollHeight - el.promptView.clientHeight); }
@@ -533,7 +533,7 @@ if(isDisplay){
     if(ver!=null){ if(ver<=pp.contentVer) return; pp.contentVer=ver; }
     el.promptText.innerHTML=html||"";
     pp.haveContent=!!(html&&html.length);
-    pp.pos=0; ppClamp(); ppTransform();
+    pp.pos=0; pp.glide=0; ppClamp(); ppTransform();
   }
   function ppApplyState(v){
     if(!v) return;
@@ -543,8 +543,8 @@ if(isDisplay){
       if(pp.lastCmdN===null){ pp.lastCmdN=v.cmd.n; }
       else if(v.cmd.n>pp.lastCmdN){
         pp.lastCmdN=v.cmd.n;
-        if(v.cmd.t==="seek"){ pp.pos = typeof v.cmd.frac==="number" ? v.cmd.frac*ppMaxPos() : pp.pos; ppClamp(); ppTransform(); }
-        else if(v.cmd.t==="nudge"){ pp.pos += (v.cmd.dy||0); ppClamp(); ppTransform(); }
+        if(v.cmd.t==="seek"){ pp.glide=0; pp.pos = typeof v.cmd.frac==="number" ? v.cmd.frac*ppMaxPos() : pp.pos; ppClamp(); ppTransform(); }
+        else if(v.cmd.t==="nudge"){ pp.glide += (v.cmd.dy||0); }   // eased in by ppGlide() so Back/Fwd slides instead of jumping
       }
     }
   }
@@ -555,9 +555,19 @@ if(isDisplay){
     pp.ref = promptBase(topic);
     pp.ref.on("value", snap=>ppApplyState(snap.val()));
   }
-  let ppLastTime=0;
+  // Back/Fwd glide: ease-out over ~0.4s (time constant PP_GLIDE_MS); pressing again mid-glide just adds on
+  const PP_GLIDE_MS=120;
+  let ppLastTime=0, ppGlideT=0;
+  function ppGlide(now){
+    if(!pp.glide){ ppGlideT=0; return; }
+    const dt=ppGlideT?Math.min(100,now-ppGlideT):16; ppGlideT=now;
+    let step=pp.glide*(1-Math.exp(-dt/PP_GLIDE_MS));
+    if(Math.abs(pp.glide-step)<0.5) step=pp.glide;
+    pp.glide-=step; pp.pos+=step; ppClamp(); ppTransform();
+  }
   function ppAdvance(){
     const now=(window.performance&&performance.now)?performance.now():Date.now();
+    ppGlide(now);
     if(pp.settings.playing && pp.haveContent){
       if(ppLastTime){ pp.pos += pp.settings.speed*(now-ppLastTime)/1000; ppClamp(); ppTransform(); }
       ppLastTime=now;
@@ -1399,7 +1409,7 @@ if(isDisplay){
     }
     function pvMax(){ pvMaxV=Math.max(0, pv.scrollHeight - $("ppPrevView").clientHeight); }
     function drawPrev(){ if(pvPos<0)pvPos=0; if(pvPos>pvMaxV)pvPos=pvMaxV; pv.style.transform="translateY("+(-Math.round(pvPos))+"px)"; }
-    function nudgePreview(dy){ pvPos+=dy; drawPrev(); }
+    function nudgePreview(dy){ if(Date.now()-dispPosAt<2500) return; pvPos+=dy; drawPrev(); }   // with a Display open the preview follows its glide instead
     function pvAdvance(){
       layoutMini();
       const now=(window.performance&&performance.now)?performance.now():Date.now(), following=Date.now()-dispPosAt<2500;
