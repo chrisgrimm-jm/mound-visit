@@ -264,7 +264,7 @@
             <label class="tg">Show reading line <input type="checkbox" id="ppSl" checked></label>
           </div>
         </div>
-        <div class="note">Rendered on the Display when Teleprompter is <b>SHOW</b>n above, in Full / Top band / Bottom band.</div>
+        <div class="note">Rendered on the Display when Teleprompter is <b>SHOWING</b> above, in Full / Top band / Bottom band.</div>
       </div>
     </div>
   </div>
@@ -283,7 +283,7 @@
       <button class="ghost" id="monAllow" style="display:none" title="Chrome/Edge will ask to manage windows on your displays">Allow</button>
       <button class="ghost" id="monIdent" title="Flash each monitor's number for 3 seconds">Identify</button>
     </div>
-    <div class="hint">HIDE blanks the whole Display and shows a test pattern (so you can tell the monitor is alive). The test pattern also appears by itself whenever there's no feed.</div>
+    <div class="hint">Hiding blanks the whole Display and shows a test pattern (so you can tell the monitor is alive). The test pattern also appears by itself whenever there's no feed.</div>
   </div>
 
   <div class="card">
@@ -738,10 +738,10 @@ if(isDisplay){
   navigator.mediaDevices.addEventListener("devicechange",()=>refreshCams(false));   // e.g. OBS Virtual Camera started
   refreshCams(false);
 
-  // SHOW/HIDE toggle buttons (label = the action; green = currently shown)
+  // show/hide toggle buttons: label = current state (green "● SHOWING" / grey "HIDDEN"), click flips it
   const showPaint={};
   function togBtn(id,key){
-    const b=$(id), paint=()=>{ b.textContent=state[key]?"HIDE":"SHOW"; b.classList.toggle("on",!!state[key]); };
+    const b=$(id), paint=()=>{ b.textContent=state[key]?"● SHOWING":"HIDDEN"; b.title=state[key]?"Click to hide":"Click to show"; b.classList.toggle("on",!!state[key]); };
     b.onclick=()=>{ state[key]=!state[key]; paint(); send(); }; paint();
     showPaint[key]=paint;
   }
